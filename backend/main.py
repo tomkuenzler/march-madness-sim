@@ -27,7 +27,11 @@ app = FastAPI(title="March Madness Simulator", version="1.0.0")
 # Allow the Svelte dev server (port 5173) to call the API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:4173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:4173",
+        "https://march-madness-sim-nine.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
