@@ -42,7 +42,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 CSV_PATH = os.path.join(os.path.dirname(__file__), "data", "kenpom.csv")
-N_SIMULATIONS = 10_000
+N_SIMULATIONS = int(os.environ.get("N_SIMULATIONS", "10000"))
 
 _teams: dict[str, Team] = {}
 _simulation_cache: dict = {}

@@ -68,7 +68,6 @@ export async function runSimulation() {
     try {
         const res = await axios.post(`${API_BASE}/api/simulate`, {
             locked_results: currentPending,
-            n_simulations: 10000,
         });
         simulationData.set(res.data);
         lockedResults.set(res.data.locked_results || {});
@@ -116,7 +115,6 @@ export async function unlockAll() {
     try {
         const res = await axios.post(`${API_BASE}/api/simulate`, {
             locked_results: {},
-            n_simulations: 10000,
         });
         simulationData.set(res.data);
         lockedResults.set({});
