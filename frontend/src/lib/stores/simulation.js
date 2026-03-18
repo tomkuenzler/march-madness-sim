@@ -2,7 +2,7 @@ import { writable, derived } from 'svelte/store';
 import axios from 'axios';
 
 //const API_BASE = 'http://localhost:8000';
-const API_BASE = 'https://march-madness-sim.onrender.com';
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
 
 export const simulationData = writable(null);
 export const isLoading = writable(false);
