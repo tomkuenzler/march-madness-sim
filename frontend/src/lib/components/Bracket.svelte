@@ -1,6 +1,7 @@
 <script>
   import { simulationData } from '$lib/stores/simulation.js';
   import BracketSVG from './BracketSVG.svelte';
+  import OddsTable from './OddsTable.svelte';
 
   function getAdv(teamName, round) {
     return $simulationData?.teams?.[teamName]?.advancement?.[round] ?? 0;
@@ -37,50 +38,8 @@
   <!-- Traditional SVG bracket -->
   <BracketSVG />
 
-  <!-- Full tournament odds table -->
-  <div class="section">
-    <h2 class="section-title">Full Tournament Odds</h2>
-    <div class="table-wrap">
-      <table class="odds-table">
-        <thead>
-          <tr>
-            <th>Team</th>
-            <th>Seed</th>
-            <th>Region</th>
-            <th>R32</th>
-            <th>S16</th>
-            <th>E8</th>
-            <th>FF</th>
-            <th>Final</th>
-            <th>🏆 Win</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each Object.entries($simulationData?.teams ?? {})
-            .map(([name, t]) => ({ name, ...t }))
-            .sort((a, b) => b.advancement.Champion - a.advancement.Champion) as team}
-            <tr>
-              <td class="team-name-cell">{team.name}</td>
-              <td class="num-cell">#{team.seed}</td>
-              <td class="region-cell">{team.region}</td>
-              <td style="color: {team.advancement.R32 > 0.6 ? '#4ade80' : team.advancement.R32 > 0.4 ? '#facc15' : '#f87171'}">
-                {(team.advancement.R32 * 100).toFixed(0)}%
-              </td>
-              <td style="color: {team.advancement.S16 > 0.4 ? '#4ade80' : team.advancement.S16 > 0.2 ? '#facc15' : '#f87171'}">
-                {(team.advancement.S16 * 100).toFixed(0)}%
-              </td>
-              <td style="color: {team.advancement.E8 > 0.25 ? '#4ade80' : team.advancement.E8 > 0.1 ? '#facc15' : '#f87171'}">
-                {(team.advancement.E8 * 100).toFixed(0)}%
-              </td>
-              <td style="color: #a78bfa">{(team.advancement.FF * 100).toFixed(0)}%</td>
-              <td style="color: #93c5fd">{(team.advancement.Championship * 100).toFixed(0)}%</td>
-              <td class="champ-cell">{(team.advancement.Champion * 100).toFixed(1)}%</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-  </div>
+  <!-- Tabbed odds/leverage/betting table -->
+  <OddsTable />
 
   <!-- Insights section -->
   <div class="insights-grid">

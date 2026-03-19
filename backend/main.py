@@ -1,13 +1,10 @@
 """
 main.py
 FastAPI backend for the March Madness Monte Carlo simulator.
-
-Endpoints:
-  GET  /api/teams        - Raw team stats from KenPom CSV
-  GET  /api/simulation   - Cached simulation results
-  POST /api/simulate     - Re-run simulation (with optional locked results)
-  POST /api/lock         - Update locked game winners and re-run
 """
+
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +14,8 @@ import os
 
 from bracket import load_teams_from_csv, Team
 from simulator import run_monte_carlo
+from leverage import load_consensus_picks, compute_leverage
+from odds import build_odds_summary
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -24,7 +23,6 @@ from simulator import run_monte_carlo
 
 app = FastAPI(title="March Madness Simulator", version="1.0.0")
 
-# Allow the Svelte dev server (port 5173) to call the API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -38,7 +36,7 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# State: loaded once at startup, cached after each simulation run
+# State
 # ---------------------------------------------------------------------------
 
 CSV_PATH = os.path.join(os.path.dirname(__file__), "data", "kenpom.csv")
@@ -46,20 +44,21 @@ N_SIMULATIONS = int(os.environ.get("N_SIMULATIONS", "10000"))
 
 _teams: dict[str, Team] = {}
 _simulation_cache: dict = {}
-_locked_results: dict[str, str] = {}   # game_id -> winning team name
-
+_locked_results: dict[str, str] = {}
+_consensus_cache: Optional[dict] = None
+_leverage_cache: dict = {}
+_odds_cache: dict = {}
 
 # ---------------------------------------------------------------------------
-# Startup: load CSV and run initial simulation
+# Startup
 # ---------------------------------------------------------------------------
 
 @app.on_event("startup")
 async def startup_event():
-    global _teams, _simulation_cache
+    global _teams, _simulation_cache, _consensus_cache, _leverage_cache
 
     if not os.path.exists(CSV_PATH):
         print(f"[WARNING] KenPom CSV not found at {CSV_PATH}")
-        print("Place your kenpom.csv in backend/data/ and restart the server.")
         return
 
     try:
@@ -71,34 +70,41 @@ async def startup_event():
         print(f"[ERROR] Failed to load/simulate: {e}")
         raise
 
+    # Load leverage if consensus CSVs exist
+    try:
+        _consensus_cache = load_consensus_picks()
+        if _consensus_cache and _simulation_cache:
+            _leverage_cache = compute_leverage(_simulation_cache, _consensus_cache)
+            print(f"[OK] Leverage computed for {len(_leverage_cache.get('teams', {}))} teams")
+        else:
+            print("[INFO] Leverage skipped — add consensus CSVs to backend/data/ when ready")
+    except Exception as e:
+        print(f"[WARNING] Leverage loading failed: {e}")
 
 # ---------------------------------------------------------------------------
 # Request/response models
 # ---------------------------------------------------------------------------
 
 class SimulateRequest(BaseModel):
-    locked_results: Optional[dict[str, str]] = {}   # game_id -> team name
+    locked_results: Optional[dict[str, str]] = {}
     n_simulations: Optional[int] = N_SIMULATIONS
-
 
 class LockGameRequest(BaseModel):
     game_id: str
-    winner: Optional[str] = None   # None = unlock the game
+    winner: Optional[str] = None
 
 class MatchupRequest(BaseModel):
     team_a: str
     team_b: str
 
 # ---------------------------------------------------------------------------
-# Endpoints
+# Existing endpoints
 # ---------------------------------------------------------------------------
 
 @app.get("/api/teams")
 def get_teams():
-    """Return raw team stats for all tournament teams."""
     if not _teams:
-        raise HTTPException(status_code=503, detail="Team data not loaded. Check your kenpom.csv.")
-
+        raise HTTPException(status_code=503, detail="Team data not loaded.")
     return {
         name: {
             "name": team.name,
@@ -112,86 +118,59 @@ def get_teams():
         for name, team in _teams.items()
     }
 
-
 @app.get("/api/simulation")
 def get_simulation():
-    """Return the cached simulation results."""
     if not _simulation_cache:
-        raise HTTPException(
-            status_code=503,
-            detail="Simulation not yet run. Check that kenpom.csv is loaded."
-        )
+        raise HTTPException(status_code=503, detail="Simulation not yet run.")
     return {**_simulation_cache, "locked_results": _locked_results}
-
 
 @app.post("/api/simulate")
 def run_simulation(req: SimulateRequest):
-    """
-    Re-run the Monte Carlo simulation.
-    Optionally pass locked_results to pin certain game winners.
-    """
-    global _simulation_cache, _locked_results
-
+    global _simulation_cache, _locked_results, _leverage_cache
     if not _teams:
         raise HTTPException(status_code=503, detail="Team data not loaded.")
-
     locked = req.locked_results or {}
     n = max(1_000, min(req.n_simulations or N_SIMULATIONS, 100_000))
-
     try:
         _locked_results = locked
         _simulation_cache = run_monte_carlo(_teams, n, locked)
+        # Recompute leverage with new simulation results
+        if _consensus_cache:
+            _leverage_cache = compute_leverage(_simulation_cache, _consensus_cache)
         return {**_simulation_cache, "locked_results": _locked_results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/api/lock")
 def lock_game(req: LockGameRequest):
-    """
-    Lock or unlock a single game winner, then re-run the simulation.
-    Send winner=null to unlock a previously locked game.
-    """
-    global _simulation_cache, _locked_results
-
+    global _simulation_cache, _locked_results, _leverage_cache
     if not _teams:
         raise HTTPException(status_code=503, detail="Team data not loaded.")
-
     if req.winner is None:
         _locked_results.pop(req.game_id, None)
     else:
         _locked_results[req.game_id] = req.winner
-
     try:
         _simulation_cache = run_monte_carlo(_teams, N_SIMULATIONS, _locked_results)
+        if _consensus_cache:
+            _leverage_cache = compute_leverage(_simulation_cache, _consensus_cache)
         return {**_simulation_cache, "locked_results": _locked_results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/api/matchup")
 def compute_matchup(req: MatchupRequest):
-    """
-    Compute point spread and win probability for any two teams on demand.
-    Used by the bracket modal for future round matchups.
-    Does NOT run a simulation — pure math from KenPom stats.
-    """
     if not _teams:
         raise HTTPException(status_code=503, detail="Team data not loaded.")
-
     team_a = _teams.get(req.team_a)
     team_b = _teams.get(req.team_b)
-
     if not team_a:
         raise HTTPException(status_code=404, detail=f"Team not found: {req.team_a}")
     if not team_b:
         raise HTTPException(status_code=404, detail=f"Team not found: {req.team_b}")
-
     from simulator import point_differential, win_probability
-
     diff = point_differential(team_a, team_b)
     prob_a = win_probability(team_a, team_b)
-
     return {
         "team_a": req.team_a,
         "team_b": req.team_b,
@@ -202,23 +181,16 @@ def compute_matchup(req: MatchupRequest):
         "spread": round(abs(diff), 2),
         "upset_alert": abs(diff) < 3.0,
         "team_a_stats": {
-            "seed": team_a.seed,
-            "region": team_a.region,
-            "adj_em": team_a.adj_em,
-            "adj_o": team_a.adj_o,
-            "adj_d": team_a.adj_d,
-            "adj_t": team_a.adj_t,
+            "seed": team_a.seed, "region": team_a.region,
+            "adj_em": team_a.adj_em, "adj_o": team_a.adj_o,
+            "adj_d": team_a.adj_d, "adj_t": team_a.adj_t,
         },
         "team_b_stats": {
-            "seed": team_b.seed,
-            "region": team_b.region,
-            "adj_em": team_b.adj_em,
-            "adj_o": team_b.adj_o,
-            "adj_d": team_b.adj_d,
-            "adj_t": team_b.adj_t,
+            "seed": team_b.seed, "region": team_b.region,
+            "adj_em": team_b.adj_em, "adj_o": team_b.adj_o,
+            "adj_d": team_b.adj_d, "adj_t": team_b.adj_t,
         },
     }
-
 
 @app.get("/api/health")
 def health():
@@ -227,4 +199,67 @@ def health():
         "teams_loaded": len(_teams),
         "simulation_ready": bool(_simulation_cache),
         "locked_games": len(_locked_results),
+        "leverage_ready": bool(_leverage_cache),
+        "odds_ready": bool(_odds_cache),
     }
+
+# ---------------------------------------------------------------------------
+# Leverage endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/leverage")
+def get_leverage():
+    if not _leverage_cache:
+        return {
+            "available": False,
+            "message": "Leverage data not available. Add yahoo_picks.csv to backend/data/",
+        }
+    return {**_leverage_cache, "available": True}
+
+@app.post("/api/leverage/refresh")
+def refresh_leverage():
+    global _consensus_cache, _leverage_cache
+    _consensus_cache = load_consensus_picks()
+    if _consensus_cache and _simulation_cache:
+        _leverage_cache = compute_leverage(_simulation_cache, _consensus_cache)
+        return {**_leverage_cache, "available": True}
+    return {"available": False, "message": "Could not load consensus data"}
+
+# ---------------------------------------------------------------------------
+# Odds endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/odds")
+def get_odds():
+    if _odds_cache:
+        return _odds_cache
+    return {
+        "available": False,
+        "message": "Odds not yet fetched. Call POST /api/odds/refresh to load.",
+    }
+
+@app.post("/api/odds/refresh")
+def refresh_odds():
+    global _odds_cache
+    if not _simulation_cache:
+        raise HTTPException(status_code=503, detail="Simulation not yet run")
+    _odds_cache = build_odds_summary(_simulation_cache)
+    return _odds_cache
+
+@app.get("/api/odds/sports")
+def get_available_sports():
+    """Temporary debug endpoint — list all available sports from The Odds API."""
+    import requests
+    resp = requests.get(
+        "https://api.the-odds-api.com/v4/sports",
+        params={"apiKey": os.environ.get("ODDS_API_KEY", "")}
+    )
+    return resp.json()
+
+@app.get("/api/odds/rounds")
+def get_round_odds():
+    """Return FanDuel round-by-round advancement odds with edges."""
+    if not _simulation_cache:
+        raise HTTPException(status_code=503, detail="Simulation not yet run")
+    from odds import load_fanduel_odds
+    return load_fanduel_odds(_simulation_cache)
