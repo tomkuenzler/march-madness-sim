@@ -1,0 +1,59 @@
+{
+  "_note": "Results through end of Day 3 (R2 Saturday). Sunday R2 games still in progress as of March 22.",
+
+  "East_R1_G1": "Duke",
+  "East_R1_G2": "TCU",
+  "East_R1_G3": "St. John's",
+  "East_R1_G4": "Kansas",
+  "East_R1_G5": "Louisville",
+  "East_R1_G6": "Michigan St.",
+  "East_R1_G7": "UCLA",
+  "East_R1_G8": "Connecticut",
+
+  "West_R1_G1": "Arizona",
+  "West_R1_G2": "Utah St.",
+  "West_R1_G3": "High Point",
+  "West_R1_G4": "Arkansas",
+  "West_R1_G5": "Texas",
+  "West_R1_G6": "Gonzaga",
+  "West_R1_G7": "Miami FL",
+  "West_R1_G8": "Purdue",
+
+  "South_R1_G1": "Florida",
+  "South_R1_G2": "Iowa",
+  "South_R1_G3": "Vanderbilt",
+  "South_R1_G4": "Nebraska",
+  "South_R1_G5": "VCU",
+  "South_R1_G6": "Illinois",
+  "South_R1_G7": "Texas A&M",
+  "South_R1_G8": "Houston",
+
+  "Midwest_R1_G1": "Michigan",
+  "Midwest_R1_G2": "Saint Louis",
+  "Midwest_R1_G3": "Texas Tech",
+  "Midwest_R1_G4": "Alabama",
+  "Midwest_R1_G5": "Tennessee",
+  "Midwest_R1_G6": "Virginia",
+  "Midwest_R1_G7": "Kentucky",
+  "Midwest_R1_G8": "Iowa St.",
+
+  "East_R2_G1": "Duke",
+  "East_R2_G2": "St. John's",
+  "East_R2_G3": "Michigan St.",
+  "East_R2_G4": "Connecticut",
+
+  "West_R2_G1": "Arizona",
+  "West_R2_G2": "Arkansas",
+  "West_R2_G3": "Texas",
+  "West_R2_G4": "Purdue",
+
+  "South_R2_G1": "Iowa",
+  "South_R2_G2": "Nebraska",
+  "South_R2_G3": "Illinois",
+  "South_R2_G4": "Houston",
+
+  "Midwest_R2_G1": "Michigan",
+  "Midwest_R2_G2": "Alabama",
+  "Midwest_R2_G3": "Tennessee",
+  "Midwest_R2_G4": "Iowa St."
+}

@@ -3,7 +3,7 @@
   import { 
       fetchSimulation, runSimulation, unlockAll, clearAllLocks,
       isLoading, error, simulationData, 
-      lockedResults, pendingLocks, hasPendingChanges 
+      lockedResults, pendingLocks, hasPendingChanges, clearAllActualResults, actualResults 
   } from '$lib/stores/simulation.js';
   import Bracket from '$lib/components/Bracket.svelte';
 
@@ -35,6 +35,11 @@
           <button class="clear-btn" onclick={clearAllLocks} disabled={$isLoading}>
               🗑 Clear Bracket
           </button>
+      {/if}
+            {#if Object.keys($actualResults).length > 0}
+        <button class="results-btn" onclick={clearAllActualResults} disabled={$isLoading}>
+          🗑 Clear Results ({Object.keys($actualResults).length})
+        </button>
       {/if}
       <button class="rerun-btn" onclick={handleRerun} disabled={$isLoading}>
         {#if $isLoading}
@@ -179,6 +184,23 @@
   }
 
   .clear-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .results-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1.2rem;
+    background: transparent;
+    border: 1px solid #ef4444;
+    color: #f87171;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .results-btn:hover:not(:disabled) { background: #1a0a0a; }
+  .results-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
   .rerun-btn {
     display: flex;

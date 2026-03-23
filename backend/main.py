@@ -16,6 +16,7 @@ from bracket import load_teams_from_csv, Team
 from simulator import run_monte_carlo
 from leverage import load_consensus_picks, compute_leverage
 from odds import build_odds_summary
+from results import load_results, set_result, clear_result, clear_all_results, merge_with_locks
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -48,6 +49,7 @@ _locked_results: dict[str, str] = {}
 _consensus_cache: Optional[dict] = None
 _leverage_cache: dict = {}
 _odds_cache: dict = {}
+_actual_results: dict[str, str] = {}  # persistent real game results
 
 # ---------------------------------------------------------------------------
 # Startup
@@ -80,6 +82,19 @@ async def startup_event():
             print("[INFO] Leverage skipped — add consensus CSVs to backend/data/ when ready")
     except Exception as e:
         print(f"[WARNING] Leverage loading failed: {e}")
+
+    # Load persisted game results
+    global _actual_results
+    _actual_results = load_results()
+    if _actual_results:
+        print(f"[OK] Loaded {len(_actual_results)} stored game results")
+        # Re-run simulation with actual results merged in
+        try:
+            merged = merge_with_locks(_actual_results, _locked_results)
+            _simulation_cache = run_monte_carlo(_teams, N_SIMULATIONS, merged)
+            print(f"[OK] Simulation updated with actual results")
+        except Exception as e:
+            print(f"[WARNING] Could not re-run simulation with results: {e}")
 
 # ---------------------------------------------------------------------------
 # Request/response models
@@ -122,7 +137,7 @@ def get_teams():
 def get_simulation():
     if not _simulation_cache:
         raise HTTPException(status_code=503, detail="Simulation not yet run.")
-    return {**_simulation_cache, "locked_results": _locked_results}
+    return {**_simulation_cache, "locked_results": _locked_results, "actual_results": _actual_results}
 
 @app.post("/api/simulate")
 def run_simulation(req: SimulateRequest):
@@ -133,11 +148,11 @@ def run_simulation(req: SimulateRequest):
     n = max(1_000, min(req.n_simulations or N_SIMULATIONS, 100_000))
     try:
         _locked_results = locked
-        _simulation_cache = run_monte_carlo(_teams, n, locked)
-        # Recompute leverage with new simulation results
+        merged = merge_with_locks(_actual_results, locked)  # ← add this
+        _simulation_cache = run_monte_carlo(_teams, n, merged)  # ← use merged
         if _consensus_cache:
             _leverage_cache = compute_leverage(_simulation_cache, _consensus_cache)
-        return {**_simulation_cache, "locked_results": _locked_results}
+        return {**_simulation_cache, "locked_results": _locked_results, "actual_results": _actual_results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -151,10 +166,11 @@ def lock_game(req: LockGameRequest):
     else:
         _locked_results[req.game_id] = req.winner
     try:
-        _simulation_cache = run_monte_carlo(_teams, N_SIMULATIONS, _locked_results)
+        merged = merge_with_locks(_actual_results, _locked_results)  # ← add this
+        _simulation_cache = run_monte_carlo(_teams, N_SIMULATIONS, merged)  # ← use merged
         if _consensus_cache:
             _leverage_cache = compute_leverage(_simulation_cache, _consensus_cache)
-        return {**_simulation_cache, "locked_results": _locked_results}
+        return {**_simulation_cache, "locked_results": _locked_results, "actual_results": _actual_results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -192,7 +208,75 @@ def compute_matchup(req: MatchupRequest):
         },
     }
 
+# ---------------------------------------------------------------------------
+# Results endpoints (persistent actual game results)
+# ---------------------------------------------------------------------------
+
+class SetResultRequest(BaseModel):
+    game_id: str
+    winner: str
+
+@app.get("/api/results")
+def get_results():
+    """Return all stored actual game results."""
+    return {"results": _actual_results, "count": len(_actual_results)}
+
+@app.post("/api/results/set")
+def set_game_result(req: SetResultRequest):
+    """
+    Mark a game as completed with a real winner.
+    Persists to disk and re-runs simulation.
+    """
+    global _actual_results, _simulation_cache, _leverage_cache
+    if not _teams:
+        raise HTTPException(status_code=503, detail="Team data not loaded.")
+
+    _actual_results = set_result(req.game_id, req.winner)
+
+    try:
+        merged = merge_with_locks(_actual_results, _locked_results)
+        _simulation_cache = run_monte_carlo(_teams, N_SIMULATIONS, merged)
+        if _consensus_cache:
+            _leverage_cache = compute_leverage(_simulation_cache, _consensus_cache)
+        return {
+            **_simulation_cache,
+            "locked_results": _locked_results,
+            "actual_results": _actual_results,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/results/clear")
+def clear_game_results():
+    """Clear all stored actual results and re-run simulation."""
+    global _actual_results, _simulation_cache, _leverage_cache
+    _actual_results = clear_all_results()
+    try:
+        _simulation_cache = run_monte_carlo(_teams, N_SIMULATIONS, _locked_results)
+        if _consensus_cache:
+            _leverage_cache = compute_leverage(_simulation_cache, _consensus_cache)
+        return {
+            **_simulation_cache,
+            "locked_results": _locked_results,
+            "actual_results": _actual_results,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/results/single")
+def clear_single_result(game_id: str):
+    """Remove a single game result."""
+    global _actual_results, _simulation_cache
+    _actual_results = clear_result(game_id)
+    try:
+        merged = merge_with_locks(_actual_results, _locked_results)
+        _simulation_cache = run_monte_carlo(_teams, N_SIMULATIONS, merged)
+        return {"actual_results": _actual_results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/health")
+
 def health():
     return {
         "status": "ok",
@@ -245,21 +329,3 @@ def refresh_odds():
         raise HTTPException(status_code=503, detail="Simulation not yet run")
     _odds_cache = build_odds_summary(_simulation_cache)
     return _odds_cache
-
-@app.get("/api/odds/sports")
-def get_available_sports():
-    """Temporary debug endpoint — list all available sports from The Odds API."""
-    import requests
-    resp = requests.get(
-        "https://api.the-odds-api.com/v4/sports",
-        params={"apiKey": os.environ.get("ODDS_API_KEY", "")}
-    )
-    return resp.json()
-
-@app.get("/api/odds/rounds")
-def get_round_odds():
-    """Return FanDuel round-by-round advancement odds with edges."""
-    if not _simulation_cache:
-        raise HTTPException(status_code=503, detail="Simulation not yet run")
-    from odds import load_fanduel_odds
-    return load_fanduel_odds(_simulation_cache)

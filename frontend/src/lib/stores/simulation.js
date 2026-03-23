@@ -8,6 +8,7 @@ export const simulationData = writable(null);
 export const isLoading = writable(false);
 export const error = writable(null);
 export const lockedResults = writable({});
+export const actualResults = writable({});
 
 // Pending locks — applied locally before re-running simulation
 // game_id -> team name, or round_key -> team name for future rounds
@@ -52,6 +53,10 @@ export async function fetchSimulation() {
         lockedResults.set(res.data.locked_results || {});
         pendingLocks.set(res.data.locked_results || {});
         hasPendingChanges.set(false);
+        try {
+            const resultsRes = await axios.get(`${API_BASE}/api/results`);
+            actualResults.set(resultsRes.data.results || {});
+        } catch (e) { console.error('Could not load results:', e); }
     } catch (e) {
         error.set('Failed to load simulation data. Is the backend running?');
         console.error(e);
@@ -139,6 +144,60 @@ export async function fetchMatchup(teamA, teamB) {
     } catch (e) {
         console.error('Matchup fetch failed:', e);
         return null;
+    }
+}
+
+export async function setGameResult(gameId, winner) {
+    isLoading.set(true);
+    error.set(null);
+    try {
+        const res = await axios.post(`${API_BASE}/api/results/set`, {
+            game_id: gameId,
+            winner,
+        });
+        simulationData.set(res.data);
+        actualResults.set(res.data.actual_results || {});
+        lockedResults.set(res.data.locked_results || {});
+        pendingLocks.set(res.data.locked_results || {});
+        hasPendingChanges.set(false);
+    } catch (e) {
+        error.set('Failed to save result.');
+        console.error(e);
+    } finally {
+        isLoading.set(false);
+    }
+}
+
+export async function clearSingleResult(gameId) {
+    isLoading.set(true);
+    error.set(null);
+    try {
+        const res = await axios.delete(`${API_BASE}/api/results/single?game_id=${gameId}`);
+        actualResults.set(res.data.actual_results || {});
+        await runSimulation();
+    } catch (e) {
+        error.set('Failed to clear result.');
+        console.error(e);
+    } finally {
+        isLoading.set(false);
+    }
+}
+
+export async function clearAllActualResults() {
+    isLoading.set(true);
+    error.set(null);
+    try {
+        const res = await axios.delete(`${API_BASE}/api/results/clear`);
+        simulationData.set(res.data);
+        actualResults.set({});
+        lockedResults.set(res.data.locked_results || {});
+        pendingLocks.set(res.data.locked_results || {});
+        hasPendingChanges.set(false);
+    } catch (e) {
+        error.set('Failed to clear results.');
+        console.error(e);
+    } finally {
+        isLoading.set(false);
     }
 }
 

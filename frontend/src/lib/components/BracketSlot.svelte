@@ -1,15 +1,50 @@
 <script>
-  import { pendingLocks } from '$lib/stores/simulation.js';
+  import { pendingLocks, actualResults } from '$lib/stores/simulation.js';
   import { SLOT_W, SLOT_H } from '$lib/bracketLayout.js';
 
-  let { slot, onclick } = $props();
+  let { slot, onclick, activeRound = 1, eliminatedTeams = {} } = $props();
+
+  // Team is eliminated in THIS slot if the round they were eliminated in matches this slot's round
+  let isEliminated = $derived(
+    slot.teamName !== null &&
+    eliminatedTeams[slot.teamName] === slot.round
+  );
+
+  // Build the game ID for this slot
+  // R1 slots: derive from slot position since they have no sourceGameId
+  // R2+ slots: use sourceGameId (the game won to reach this slot)
+  let gameId = $derived(
+    slot.round === 1 && slot.id
+      ? (() => {
+          const parts = slot.id.split('_S');
+          const slotIndex = parseInt(parts[1] ?? '0');
+          const gameIndex = Math.floor(slotIndex / 2);
+          const region = parts[0].replace('_R1', '');
+          return `${region}_R1_G${gameIndex + 1}`;
+        })()
+      : (slot.sourceGameId ?? null)
+  );
+
+  let actualWinner = $derived(gameId ? $actualResults[gameId] : null);
+  let isCompleted = $derived(actualWinner !== null && actualWinner !== undefined);
+  let isWinner = $derived(isCompleted && actualWinner === slot.teamName);
+  let isLoser = $derived(isCompleted && actualWinner !== slot.teamName && slot.teamName !== null);
 
   let isLocked = $derived(
     slot.teamName !== null &&
     Object.values($pendingLocks).includes(slot.teamName)
   );
 
-  // Only show win probability on R1 slots (the known first-round matchups)
+  // Active round: upcoming games get a blue glow
+  let isActiveRound = $derived(
+    !slot.isTBD &&
+    slot.round === activeRound &&
+    slot.teamName !== null &&
+    isWinner &&
+    !isEliminated
+  );
+
+  // Only show win probability on R1 slots
   let showProb = $derived(slot.round === 1 && slot.prob > 0);
 
   function truncate(name, max = 15) {
@@ -40,13 +75,13 @@
     width={SLOT_W}
     height={SLOT_H}
     rx="3"
-    fill={isLocked ? '#1f1a0e' : slot.isTBD ? '#12151e' : '#1e2538'}
-    stroke={isLocked ? '#f59e0b' : slot.isTBD ? '#1e2538' : '#2a3148'}
-    stroke-width="1"
+    fill={isLoser || isEliminated ? '#0a0c10' : isLocked ? '#1f1a0e' : slot.isTBD ? '#12151e' : '#1e2538'}
+    stroke={isActiveRound ? '#3b82f6' : (isWinner && !isEliminated) ? '#4ade80' : (isLoser || isEliminated) ? '#1a1d27' : isLocked ? '#f59e0b' : slot.isTBD ? '#1e2538' : '#2a3148'}
+    stroke-width={isActiveRound ? '1.5' : '1'}
+    opacity={isLoser || isEliminated ? 0.5 : 1}
   />
 
   {#if slot.isTBD}
-    <!-- TBD slot: show top 2 candidates -->
     {#if slot.topCandidates?.length > 0}
       {#each slot.topCandidates.slice(0, 2) as candidate, i}
         <text
@@ -60,7 +95,7 @@
       <text x={slot.x + 5} y={slot.y + 18} font-size="9" fill="#2a3148">TBD</text>
     {/if}
   {:else}
-    <!-- Seed badge background -->
+    <!-- Seed badge -->
     <rect
       x={slot.x + 2}
       y={slot.y + 4}
@@ -69,7 +104,6 @@
       rx="2"
       fill="#161925"
     />
-    <!-- Seed number -->
     <text
       x={slot.x + 11}
       y={slot.y + 18}
@@ -84,8 +118,9 @@
       x={slot.x + 24}
       y={slot.y + 18}
       font-size="10"
-      fill={isLocked ? '#fbbf24' : '#e2e8f0'}
-      font-weight={isLocked ? '700' : '400'}
+      fill={isActiveRound ? '#93c5fd' : (isWinner && !isEliminated) ? '#4ade80' : (isLoser || isEliminated) ? '#2a3148' : isLocked ? '#fbbf24' : '#e2e8f0'}
+      font-weight={isActiveRound || (isWinner && !isEliminated) ? '700' : '400'}
+      text-decoration={isLoser || isEliminated ? 'line-through' : 'none'}
     >{truncate(slot.teamName, showProb ? 12 : 16)}</text>
 
     <!-- Win probability (R1 only) -->

@@ -1,5 +1,7 @@
 <script>
-  import { simulationData, pendingLocks, fetchMatchup, advanceTeam, removeAdvancement } from '$lib/stores/simulation.js';
+  import { simulationData, pendingLocks, actualResults, fetchMatchup, 
+           advanceTeam, removeAdvancement, setGameResult, clearSingleResult } 
+    from '$lib/stores/simulation.js';
   import { buildBracketLayout, buildGameId, SVG_WIDTH, SVG_HEIGHT, SLOT_W, SLOT_H,
            LEFT_ROUND_X, RIGHT_ROUND_X, CHAMP_LEFT_X, CHAMP_RIGHT_X, CHAMP_Y,
            CHAMPION_X, CHAMPION_Y, ROUND_ADV_KEYS,
@@ -11,8 +13,38 @@
   let modalGame = $state(null);
   let advanceModalOpen = $state(false);
   let advanceContext = $state(null);
+  let resultModalOpen = $state(false);
+  let resultContext = $state(null);
+  // Determine active round from results
+  let activeRound = $derived(
+    Object.keys($actualResults).some(k => k.includes('_R4_')) ? 5 :
+    Object.keys($actualResults).some(k => k.includes('_R3_')) ? 4 :
+    Object.keys($actualResults).some(k => k.includes('_R2_')) ? 3 :
+    Object.keys($actualResults).some(k => k.includes('_R1_')) ? 2 : 1
+  );
+  let eliminatedTeams = $derived(
+    layout.slots.reduce((eliminated, slot) => {
+      if (!slot.teamName || slot.isTBD || !slot.sourceGameId) return eliminated;
+      const matchup = layout.matchups.find(m => m.gameId === slot.sourceGameId);
+      if (!matchup || !matchup.teamA || !matchup.teamB) return eliminated;
+      const loser = matchup.teamA === slot.teamName ? matchup.teamB : matchup.teamA;
+      if (loser) eliminated[loser] = slot.round - 1; // loser's slot is one round back
+      return eliminated;
+    }, {})
+  );
+  $effect(() => {
+    console.log('activeRound:', activeRound);
+    const s16slots = layout.slots.filter(s => s.round === 3 && !s.isTBD);
+    console.log('S16 non-TBD slots:', s16slots.length, s16slots.map(s => s.teamName));
+    // Log ALL unique round values in the layout
+    const rounds = [...new Set(layout.slots.map(s => s.round))].sort();
+    console.log('All slot rounds in layout:', rounds);
+    console.log('Sample S16 slot:', layout.slots.find(s => !s.isTBD && s.teamName === 'Duke' && s.round !== 1));
+    console.log('Duke S16 full object:', JSON.stringify(layout.slots.find(s => s.teamName === 'Duke' && s.round === 3)));
+  }); 
 
-  let layout = $derived(buildBracketLayout($simulationData, $pendingLocks));
+  let mergedLocks = $derived({ ...$actualResults, ...$pendingLocks });
+  let layout = $derived(buildBracketLayout($simulationData, mergedLocks));
 
   const ROUND_DISPLAY = {
     1: 'Round of 64', 2: 'Round of 32', 3: 'Sweet 16',
@@ -71,26 +103,28 @@
   // Championship geometry comes from bracketLayout constants
 
   async function handleSlotClick(slot) {
-    // Round 5 regional slots (FF participants) — show FF game modal
+
+    // Round 5 regional slots (FF participants)
     if (slot.round === 5 && slot.teamName && !slot.isFinalistSlot) {
       const ffMatchup = layout.matchups.find(m =>
         m.isFinalFour && (m.teamA === slot.teamName || m.teamB === slot.teamName)
       );
       if (ffMatchup && ffMatchup.teamA && ffMatchup.teamB) {
+        // Check for actual result
+        if ($actualResults[ffMatchup.gameId]) {
+          resultContext = { gameId: ffMatchup.gameId, teamA: ffMatchup.teamA, teamB: ffMatchup.teamB, winner: $actualResults[ffMatchup.gameId], round: 5, region: 'Final Four' };
+          resultModalOpen = true;
+          return;
+        }
         const data = await fetchMatchup(ffMatchup.teamA, ffMatchup.teamB);
         if (!data) return;
         modalGame = {
-          game_id: ffMatchup.gameId,
-          round: 5,
-          region: 'Final Four',
-          team_a: ffMatchup.teamA,
-          team_b: ffMatchup.teamB,
+          game_id: ffMatchup.gameId, round: 5, region: 'Final Four',
+          team_a: ffMatchup.teamA, team_b: ffMatchup.teamB,
           seed_a: $simulationData?.teams?.[ffMatchup.teamA]?.seed,
           seed_b: $simulationData?.teams?.[ffMatchup.teamB]?.seed,
-          win_prob_a: data.win_prob_a,
-          win_prob_b: data.win_prob_b,
-          point_diff: data.point_diff,
-          upset_alert: data.upset_alert,
+          win_prob_a: data.win_prob_a, win_prob_b: data.win_prob_b,
+          point_diff: data.point_diff, upset_alert: data.upset_alert,
           source_game_id: slot.sourceGameId,
         };
         modalOpen = true;
@@ -98,11 +132,10 @@
       }
     }
 
-    // FF finalist slot (the TBD/winner slot between the two FF teams)
+    // FF finalist slot
     if (slot.isFinalistSlot) {
       const ffMatchup = layout.matchups.find(m => m.gameId === slot.sourceGameId);
       if (slot.isTBD && ffMatchup) {
-        // Show advance modal with head-to-head odds
         let candidates = slot.topCandidates ?? [];
         if (candidates.length === 2 && candidates[0]?.name && candidates[1]?.name) {
           const h2h = await fetchMatchup(candidates[0].name, candidates[1].name);
@@ -113,34 +146,26 @@
             ];
           }
         }
-        advanceContext = {
-          gameId: slot.sourceGameId,
-          candidates,
-          round: slot.round,
-          region: slot.region,
-          advRoundKey: 'Championship',
-          targetRoundLabel: 'Championship',
-          isH2H: candidates[0]?.isH2H ?? false,
-        };
+        advanceContext = { gameId: slot.sourceGameId, candidates, round: slot.round, region: slot.region, advRoundKey: 'Championship', targetRoundLabel: 'Championship', isH2H: candidates[0]?.isH2H ?? false };
         advanceModalOpen = true;
         return;
       }
-      // Finalist slot has a winner — show info modal
       if (!slot.isTBD && ffMatchup?.teamA && ffMatchup?.teamB) {
+        // Check for actual result
+        if ($actualResults[ffMatchup.gameId]) {
+          resultContext = { gameId: ffMatchup.gameId, teamA: ffMatchup.teamA, teamB: ffMatchup.teamB, winner: $actualResults[ffMatchup.gameId], round: 6, region: 'Final Four' };
+          resultModalOpen = true;
+          return;
+        }
         const data = await fetchMatchup(ffMatchup.teamA, ffMatchup.teamB);
         if (!data) return;
         modalGame = {
-          game_id: ffMatchup.gameId,
-          round: 6,
-          region: 'Final Four',
-          team_a: ffMatchup.teamA,
-          team_b: ffMatchup.teamB,
+          game_id: ffMatchup.gameId, round: 6, region: 'Final Four',
+          team_a: ffMatchup.teamA, team_b: ffMatchup.teamB,
           seed_a: $simulationData?.teams?.[ffMatchup.teamA]?.seed,
           seed_b: $simulationData?.teams?.[ffMatchup.teamB]?.seed,
-          win_prob_a: data.win_prob_a,
-          win_prob_b: data.win_prob_b,
-          point_diff: data.point_diff,
-          upset_alert: data.upset_alert,
+          win_prob_a: data.win_prob_a, win_prob_b: data.win_prob_b,
+          point_diff: data.point_diff, upset_alert: data.upset_alert,
           source_game_id: slot.sourceGameId,
         };
         modalOpen = true;
@@ -162,33 +187,25 @@
             ];
           }
         }
-        advanceContext = {
-          gameId: 'Championship',
-          candidates,
-          round: slot.round,
-          region: 'Championship',
-          advRoundKey: 'Champion',
-          targetRoundLabel: 'Champion',
-          isH2H: candidates[0]?.isH2H ?? false,
-        };
+        advanceContext = { gameId: 'Championship', candidates, round: slot.round, region: 'Championship', advRoundKey: 'Champion', targetRoundLabel: 'Champion', isH2H: candidates[0]?.isH2H ?? false };
         advanceModalOpen = true;
         return;
       }
       if (!slot.isTBD && champMatchup?.teamA && champMatchup?.teamB) {
+        if ($actualResults['Championship']) {
+          resultContext = { gameId: 'Championship', teamA: champMatchup.teamA, teamB: champMatchup.teamB, winner: $actualResults['Championship'], round: 6, region: 'Championship' };
+          resultModalOpen = true;
+          return;
+        }
         const data = await fetchMatchup(champMatchup.teamA, champMatchup.teamB);
         if (!data) return;
         modalGame = {
-          game_id: 'Championship',
-          round: 6,
-          region: 'Championship',
-          team_a: champMatchup.teamA,
-          team_b: champMatchup.teamB,
+          game_id: 'Championship', round: 6, region: 'Championship',
+          team_a: champMatchup.teamA, team_b: champMatchup.teamB,
           seed_a: $simulationData?.teams?.[champMatchup.teamA]?.seed,
           seed_b: $simulationData?.teams?.[champMatchup.teamB]?.seed,
-          win_prob_a: data.win_prob_a,
-          win_prob_b: data.win_prob_b,
-          point_diff: data.point_diff,
-          upset_alert: data.upset_alert,
+          win_prob_a: data.win_prob_a, win_prob_b: data.win_prob_b,
+          point_diff: data.point_diff, upset_alert: data.upset_alert,
           source_game_id: 'Championship',
         };
         modalOpen = true;
@@ -202,31 +219,38 @@
     );
     if (!matchup) return;
 
+    // Check for actual result first
+    if ($actualResults[matchup.gameId]) {
+      resultContext = {
+        gameId: matchup.gameId,
+        teamA: matchup.teamA,
+        teamB: matchup.teamB,
+        winner: $actualResults[matchup.gameId],
+        round: matchup.round,
+        region: matchup.region,
+      };
+      resultModalOpen = true;
+      return;
+    }
+
     if (matchup.teamA && matchup.teamB) {
       const data = await fetchMatchup(matchup.teamA, matchup.teamB);
       if (!data) return;
       modalGame = {
-        game_id: matchup.gameId,
-        round: matchup.round,
-        region: matchup.region,
-        team_a: matchup.teamA,
-        team_b: matchup.teamB,
+        game_id: matchup.gameId, round: matchup.round, region: matchup.region,
+        team_a: matchup.teamA, team_b: matchup.teamB,
         seed_a: $simulationData?.teams?.[matchup.teamA]?.seed,
         seed_b: $simulationData?.teams?.[matchup.teamB]?.seed,
-        win_prob_a: data.win_prob_a,
-        win_prob_b: data.win_prob_b,
-        point_diff: data.point_diff,
-        upset_alert: data.upset_alert,
+        win_prob_a: data.win_prob_a, win_prob_b: data.win_prob_b,
+        point_diff: data.point_diff, upset_alert: data.upset_alert,
         source_game_id: slot.sourceGameId ?? null,
       };
       modalOpen = true;
     } else {
       const gameId = slot.sourceGameId;
       if (!gameId) return;
-
       const advRoundKey = ROUND_ADV_KEYS[slot.round - 1] ?? 'R32';
       let candidates = slot.topCandidates ?? [];
-
       if (candidates.length === 2 && candidates[0]?.name && candidates[1]?.name) {
         const h2h = await fetchMatchup(candidates[0].name, candidates[1].name);
         if (h2h) {
@@ -236,16 +260,7 @@
           ];
         }
       }
-
-      advanceContext = {
-        gameId,
-        candidates,
-        round: slot.round,
-        region: slot.region,
-        advRoundKey,
-        targetRoundLabel: ROUND_DISPLAY[slot.round] ?? `Round ${slot.round}`,
-        isH2H: candidates[0]?.isH2H ?? false,
-      };
+      advanceContext = { gameId, candidates, round: slot.round, region: slot.region, advRoundKey, targetRoundLabel: ROUND_DISPLAY[slot.round] ?? `Round ${slot.round}`, isH2H: candidates[0]?.isH2H ?? false };
       advanceModalOpen = true;
     }
   }
@@ -306,7 +321,7 @@
 
     <!-- Team slots -->
     {#each layout.slots as slot}
-      <BracketSlot {slot} onclick={() => handleSlotClick(slot)} />
+      <BracketSlot {slot} {activeRound} {eliminatedTeams} onclick={() => handleSlotClick(slot)} />
     {/each}
 
     <!-- Finalist slots (side by side, fed by FF games) -->
@@ -350,13 +365,13 @@
 
     <!-- Finalist and champion slots rendered via BracketSlot -->
     {#if finalistLeft}
-      <BracketSlot slot={finalistLeft} onclick={() => handleSlotClick(finalistLeft)} />
+      <BracketSlot slot={finalistLeft} {activeRound} {eliminatedTeams} onclick={() => handleSlotClick(finalistLeft)} />
     {/if}
     {#if finalistRight}
-      <BracketSlot slot={finalistRight} onclick={() => handleSlotClick(finalistRight)} />
+      <BracketSlot slot={finalistRight} {activeRound} {eliminatedTeams} onclick={() => handleSlotClick(finalistRight)} />
     {/if}
     {#if champSlot}
-      <BracketSlot slot={champSlot} onclick={() => handleSlotClick(champSlot)} />
+      <BracketSlot slot={champSlot} {activeRound} {eliminatedTeams} onclick={() => handleSlotClick(champSlot)} />
     {/if}
     {/if}
 
@@ -401,6 +416,69 @@
         </div>
         <button class="remove-btn" onclick={() => handleRemove(advanceContext.gameId)}>
           Remove This Lock
+        </button>
+      {/if}
+    </div>
+  </div>
+{/if}
+
+{#if resultModalOpen && resultContext}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div class="advance-backdrop" onclick={() => { resultModalOpen = false; resultContext = null; }}>
+    <div class="advance-modal" onclick={(e) => e.stopPropagation()}>
+      <div class="advance-header">
+        <div>
+          <span class="advance-label">
+            {ROUND_DISPLAY[resultContext.round] ?? `Round ${resultContext.round}`} · {resultContext.region}
+          </span>
+          <h3>
+            {#if resultContext.winner}
+              ✓ Result: {resultContext.winner}
+            {:else}
+              Mark Game Result
+            {/if}
+          </h3>
+        </div>
+        <button class="close-btn" onclick={() => { resultModalOpen = false; resultContext = null; }}>✕</button>
+      </div>
+
+      <p class="advance-hint">
+        {#if resultContext.winner}
+          This result is saved and affects all simulations. You can correct it or remove it.
+        {:else}
+          Select the team that won this game to lock in the real result.
+        {/if}
+      </p>
+
+      <div class="candidate-list">
+        {#each [resultContext.teamA, resultContext.teamB].filter(Boolean) as team}
+          <button
+            class="candidate-btn"
+            class:current-winner={resultContext.winner === team}
+            onclick={async () => {
+              await setGameResult(resultContext.gameId, team);
+              resultModalOpen = false;
+              resultContext = null;
+            }}
+          >
+            <span class="cand-name">{team}</span>
+            {#if resultContext.winner === team}
+              <span class="winner-badge">✓ Current Result</span>
+            {:else}
+              <span class="cand-prob">Mark as winner</span>
+            {/if}
+          </button>
+        {/each}
+      </div>
+
+      {#if resultContext.winner}
+        <button class="remove-btn" onclick={async () => {
+          await clearSingleResult(resultContext.gameId);
+          resultModalOpen = false;
+          resultContext = null;
+        }}>
+          Remove This Result
         </button>
       {/if}
     </div>
@@ -454,4 +532,13 @@
     cursor: pointer; width: 100%; transition: background 0.15s;
   }
   .remove-btn:hover { background: #3d2400; }
+  .current-winner {
+      border-color: #4ade80 !important;
+      background: #0f2010 !important;
+  }
+  .winner-badge {
+      font-size: 0.75rem;
+      color: #4ade80;
+      font-weight: 600;
+  }
 </style>
