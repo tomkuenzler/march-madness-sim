@@ -220,3 +220,20 @@ export async function lockGame(gameId, winner) {
         isLoading.set(false);
     }
 }
+
+export async function syncResultsFromESPN() {
+    isLoading.set(true);
+    error.set(null);
+    try {
+        const res = await axios.post(`${API_BASE}/api/results/sync`);
+        if (res.data.simulation_updated) {
+            await fetchSimulation();
+        }
+        return res.data;
+    } catch (e) {
+        error.set('Failed to sync ESPN results.');
+        console.error(e);
+    } finally {
+        isLoading.set(false);
+    }
+}

@@ -233,33 +233,78 @@ def build_matchup_summary(
     teams_by_region: dict[str, dict[int, Team]],
     locked_results: dict[str, str],
 ) -> dict:
-    """Build static matchup data for Round 1 games (known at bracket time)."""
+    """
+    Build matchup data for ALL rounds based on locked/actual results.
+    Round 1 always has known matchups. Later rounds are built by
+    simulating forward through the locked results.
+    """
     matchups = {}
 
     for region in REGIONS:
         seed_map = teams_by_region[region]
-        for i, (s_a, s_b) in enumerate(FIRST_ROUND_MATCHUPS):
-            gid = f"{region}_R1_G{i+1}"
-            t_a = seed_map[s_a]
-            t_b = seed_map[s_b]
-            diff = point_differential(t_a, t_b)
-            prob_a = win_probability(t_a, t_b)
 
-            # Upset flag: lower seed (higher number) has >40% chance
-            is_upset_alert = (s_a > s_b and prob_a > 0.40) or (s_b > s_a and (1 - prob_a) > 0.40)
+        # Build round-by-round winners using locked results
+        # round_teams[r] = list of Team objects playing in round r
+        round_teams = {}
+        round_teams[1] = [seed_map[s] for s in [seed for pair in FIRST_ROUND_MATCHUPS for seed in pair]]
 
-            matchups[gid] = {
-                "round": 1,
-                "region": region,
-                "team_a": t_a.name,
-                "team_b": t_b.name,
-                "seed_a": s_a,
-                "seed_b": s_b,
-                "win_prob_a": round(prob_a, 4),
-                "win_prob_b": round(1 - prob_a, 4),
-                "point_diff": round(diff, 2),
-                "locked_winner": locked_results.get(gid),
-                "upset_alert": is_upset_alert,
-            }
+        for r in range(1, 5):
+            prev = round_teams[r]
+            next_round = []
+            for game_idx in range(len(prev) // 2):
+                gid = f"{region}_R{r}_G{game_idx + 1}"
+                t_a = prev[game_idx * 2]
+                t_b = prev[game_idx * 2 + 1]
+                locked_name = locked_results.get(gid)
+                if locked_name:
+                    winner = t_a if t_a.name == locked_name else t_b
+                else:
+                    winner = None  # unknown
+                next_round.append(winner)
+            round_teams[r + 1] = next_round
+
+        # Build matchup entries for all rounds
+        for r in range(1, 5):
+            teams_in_round = round_teams[r]
+            seeds_in_round = []
+            if r == 1:
+                seeds_in_round = [s for pair in FIRST_ROUND_MATCHUPS for s in pair]
+            
+            for game_idx in range(len(teams_in_round) // 2):
+                gid = f"{region}_R{r}_G{game_idx + 1}"
+                t_a = teams_in_round[game_idx * 2]
+                t_b = teams_in_round[game_idx * 2 + 1]
+
+                if t_a is None or t_b is None:
+                    continue  # unknown matchup — both teams not yet determined
+
+                diff = point_differential(t_a, t_b)
+                prob_a = win_probability(t_a, t_b)
+
+                if r == 1:
+                    s_a = seeds_in_round[game_idx * 2]
+                    s_b = seeds_in_round[game_idx * 2 + 1]
+                else:
+                    s_a = t_a.seed
+                    s_b = t_b.seed
+
+                is_upset_alert = (
+                    (s_a > s_b and prob_a > 0.40) or
+                    (s_b > s_a and (1 - prob_a) > 0.40)
+                )
+
+                matchups[gid] = {
+                    "round": r,
+                    "region": region,
+                    "team_a": t_a.name,
+                    "team_b": t_b.name,
+                    "seed_a": s_a,
+                    "seed_b": s_b,
+                    "win_prob_a": round(prob_a, 4),
+                    "win_prob_b": round(1 - prob_a, 4),
+                    "point_diff": round(diff, 2),
+                    "locked_winner": locked_results.get(gid),
+                    "upset_alert": is_upset_alert,
+                }
 
     return matchups

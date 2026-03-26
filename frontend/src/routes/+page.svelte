@@ -3,9 +3,22 @@
   import { 
       fetchSimulation, runSimulation, unlockAll, clearAllLocks,
       isLoading, error, simulationData, 
-      lockedResults, pendingLocks, hasPendingChanges, clearAllActualResults, actualResults 
+      lockedResults, pendingLocks, hasPendingChanges, clearAllActualResults, 
+      actualResults, syncResultsFromESPN 
   } from '$lib/stores/simulation.js';
   import Bracket from '$lib/components/Bracket.svelte';
+
+  let syncMessage = $state('');
+
+  async function handleSync() {
+      const result = await syncResultsFromESPN();
+      if (result) {
+          syncMessage = result.new_results > 0
+              ? `✓ Synced ${result.new_results} new result${result.new_results > 1 ? 's' : ''}`
+              : '✓ Already up to date';
+          setTimeout(() => syncMessage = '', 4000);
+      }
+  }
 
   onMount(() => {
     fetchSimulation();
@@ -21,8 +34,14 @@
     <div class="header-left">
       <h1>🏀 March Madness Simulator</h1>
       <span class="subtitle">Monte Carlo · 10,000 simulations · KenPom data</span>
+      {#if syncMessage}
+          <span class="sync-message">{syncMessage}</span>
+      {/if}
     </div>
     <div class="header-right">
+      <button class="sync-btn" onclick={handleSync} disabled={$isLoading}>
+          {$isLoading ? 'Syncing...' : '⟳ Sync Results'}
+      </button>
       {#if $error}
         <span class="error-msg">{$error}</span>
       {/if}
@@ -139,6 +158,28 @@
     display: flex;
     align-items: center;
     gap: 1rem;
+  }
+
+  .sync-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1.2rem;
+      background: transparent;
+      border: 1px solid #3b82f6;
+      color: #93c5fd;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+  }
+  .sync-btn:hover:not(:disabled) { background: #1a2744; }
+  .sync-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .sync-message {
+      font-size: 0.8rem;
+      color: #4ade80;
+      font-weight: 600;
   }
 
   .error-msg {

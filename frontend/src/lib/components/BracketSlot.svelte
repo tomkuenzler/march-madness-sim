@@ -44,8 +44,7 @@
     !isEliminated
   );
 
-  // Only show win probability on R1 slots
-  let showProb = $derived(slot.round === 1 && slot.prob > 0);
+  let showProb = $derived(slot.prob > 0 && !slot.isTBD);
 
   function truncate(name, max = 15) {
     if (!name) return '';

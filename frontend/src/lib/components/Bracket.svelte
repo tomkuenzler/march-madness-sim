@@ -1,6 +1,7 @@
 <script>
   import { simulationData } from '$lib/stores/simulation.js';
   import BracketSVG from './BracketSVG.svelte';
+  import BestBets from './BestBets.svelte';
   import OddsTable from './OddsTable.svelte';
 
   function getAdv(teamName, round) {
@@ -39,6 +40,7 @@
   <BracketSVG />
 
   <!-- Tabbed odds/leverage/betting table -->
+  <BestBets />
   <OddsTable />
 
   <!-- Insights section -->

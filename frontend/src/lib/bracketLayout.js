@@ -127,8 +127,9 @@ export function buildBracketLayout(simulationData, pendingLocks) {
         const y = slotYs[i] - SLOT_H / 2;
 
         let prob = 0;
-        if (r === 1 && team) {
-          const gameId = buildGameId(region, 1, Math.floor(i / 2));
+        if (team) {
+          // Use API matchup data for all rounds — simulator now builds matchups R1-R4
+          const gameId = buildGameId(region, r, Math.floor(i / 2));
           const apiM = apiMatchups[gameId];
           if (apiM) prob = i % 2 === 0 ? apiM.win_prob_a : apiM.win_prob_b;
         }

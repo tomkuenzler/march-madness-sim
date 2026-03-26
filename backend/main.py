@@ -322,6 +322,14 @@ def get_odds():
         "message": "Odds not yet fetched. Call POST /api/odds/refresh to load.",
     }
 
+@app.get("/api/odds/rounds")
+def get_round_odds():
+    """Return FanDuel round-by-round advancement odds with edges."""
+    if not _simulation_cache:
+        raise HTTPException(status_code=503, detail="Simulation not yet run")
+    from odds import load_fanduel_odds
+    return load_fanduel_odds(_simulation_cache)
+
 @app.post("/api/odds/refresh")
 def refresh_odds():
     global _odds_cache
@@ -329,3 +337,45 @@ def refresh_odds():
         raise HTTPException(status_code=503, detail="Simulation not yet run")
     _odds_cache = build_odds_summary(_simulation_cache)
     return _odds_cache
+
+# ---------------------------------------------------------------------------
+# ESPN auto-sync endpoint
+# ---------------------------------------------------------------------------
+
+@app.post("/api/results/sync")
+def sync_results_from_espn():
+    """
+    Fetch completed NCAA Tournament results from ESPN and update results.json.
+    Only adds new results — never overwrites existing ones.
+    """
+    global _actual_results, _simulation_cache, _leverage_cache
+    if not _teams:
+        raise HTTPException(status_code=503, detail="Team data not loaded.")
+
+    from espn_sync import fetch_espn_results
+
+    known_teams = set(_teams.keys())
+    try:
+        updated = fetch_espn_results(known_teams, _actual_results)
+        new_count = len(updated) - len(_actual_results)
+
+        if new_count > 0:
+            from results import save_results
+            save_results(updated)
+            _actual_results = updated
+            merged = merge_with_locks(_actual_results, _locked_results)
+            _simulation_cache = run_monte_carlo(_teams, N_SIMULATIONS, merged)
+            if _consensus_cache:
+                _leverage_cache = compute_leverage(_simulation_cache, _consensus_cache)
+            print(f"[ESPN] Synced {new_count} new results")
+        else:
+            print("[ESPN] No new results found")
+
+        return {
+            "new_results": new_count,
+            "total_results": len(updated),
+            "results": updated,
+            "simulation_updated": new_count > 0,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ESPN sync failed: {e}")

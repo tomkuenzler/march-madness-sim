@@ -278,7 +278,7 @@ def load_fanduel_odds(simulation_results: dict) -> dict:
             val = str(row.get(r, '')).strip()
             if val and val not in ('', 'nan'):
                 try:
-                    odds_for_round[row['Team']] = int(val)
+                    odds_for_round[row['Team']] = int(float(val))
                 except ValueError:
                     pass
         round_odds_map[r] = odds_for_round
@@ -301,11 +301,24 @@ def load_fanduel_odds(simulation_results: dict) -> dict:
 
         # Match team name (exact first, then partial)
         def find_csv_name(name):
+            # Exact match first
             if name in round_odds_map.get('R32', {}):
                 return name
-            for csv_name in (round_odds_map.get('R32') or round_odds_map.get('S16') or {}).keys():
-                if name.lower() in csv_name.lower() or csv_name.lower() in name.lower():
+            # Check any round for exact match
+            for r_odds in round_odds_map.values():
+                if name in r_odds:
+                    return name
+            # Fuzzy: sort by length descending so "Michigan St." matches before "Michigan"
+            all_csv_names = list((round_odds_map.get('E8') or round_odds_map.get('R32') or {}).keys())
+            all_csv_names.sort(key=len, reverse=True)
+            for csv_name in all_csv_names:
+                if name.lower() == csv_name.lower():
                     return csv_name
+                # Only match if BOTH are substrings of each other AND lengths are close
+                if (name.lower() in csv_name.lower() or csv_name.lower() in name.lower()):
+                    # Avoid matching "Iowa" to "Iowa St." — require length similarity
+                    if abs(len(name) - len(csv_name)) <= 3:
+                        return csv_name
             return None
 
         csv_name = find_csv_name(team_name)
