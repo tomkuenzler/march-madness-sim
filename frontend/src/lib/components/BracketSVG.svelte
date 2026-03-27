@@ -221,15 +221,25 @@
 
     // Check for actual result first
     if ($actualResults[matchup.gameId]) {
-      resultContext = {
-        gameId: matchup.gameId,
-        teamA: matchup.teamA,
-        teamB: matchup.teamB,
-        winner: $actualResults[matchup.gameId],
+      // Show full game modal with stats, plus winner indicator
+      const data = await fetchMatchup(matchup.teamA, matchup.teamB);
+      if (!data) return;
+      modalGame = {
+        game_id: matchup.gameId,
         round: matchup.round,
         region: matchup.region,
+        team_a: matchup.teamA,
+        team_b: matchup.teamB,
+        seed_a: $simulationData?.teams?.[matchup.teamA]?.seed,
+        seed_b: $simulationData?.teams?.[matchup.teamB]?.seed,
+        win_prob_a: data.win_prob_a,
+        win_prob_b: data.win_prob_b,
+        point_diff: data.point_diff,
+        upset_alert: data.upset_alert,
+        source_game_id: slot.sourceGameId ?? null,
+        completed_winner: $actualResults[matchup.gameId],
       };
-      resultModalOpen = true;
+      modalOpen = true;
       return;
     }
 

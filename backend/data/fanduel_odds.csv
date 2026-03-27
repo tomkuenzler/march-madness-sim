@@ -1,13 +1,13 @@
 Team,R32,S16,E8,FF,Championship,Champion
 Akron,,,,,,
-Alabama,,,350,950,3000,8000
-Arizona,,,-375,-135,190,370
-Arkansas,,,290,700,2000,5000
+Alabama,,,330,850,3300,8000
+Arizona,,,,-230,135,260
+Arkansas,,,,,,
 BYU,,,,,,
 Cal Baptist,,,,,,
 Clemson,,,,,,
-Connecticut,,,-128,370,800,2200
-Duke,,,-280,-115,180,430
+Connecticut,,,-125,370,750,2200
+Duke,,,-275,-110,165,380
 Florida,,,,,,
 Furman,,,,,,
 Georgia,,,,,,
@@ -15,12 +15,12 @@ Gonzaga,,,,,,
 Hawaii,,,,,,
 High Point,,,,,,
 Hofstra,,,,,,
-Houston,,,-166,110,280,650
+Houston,,,,,,
 Howard,,,,,,
 Idaho,,,,,,
-Illinois,,,136,210,600,1600
-Iowa,,,108,650,2500,8000
-Iowa St.,,,-192,300,800,1700
+Illinois,,,,-270,200,650
+Iowa,,,,210,1100,4500
+Iowa St.,,,-178,290,850,1800
 Kansas,,,,,,
 Kennesaw St.,,,,,,
 Kentucky,,,,,,
@@ -29,27 +29,27 @@ Louisville,,,,,,
 McNeese,,,,,,
 Miami FL,,,,,,
 Miami OH,,,,,,
-Michigan,,,-465,-160,165,300
-Michigan St.,,,106,460,1000,3000
+Michigan,,,-430,-155,190,340
+Michigan St.,,,104,450,900,2500
 Missouri,,,,,,
-Nebraska,,,-130,500,1800,6500
+Nebraska,,,,,,
 North Carolina,,,,,,
 North Dakota St.,,,,,,
 Northern Iowa,,,,,,
 Ohio St.,,,,,,
 Penn,,,,,,
-Purdue,,,-345,210,600,1300
+Purdue,,,,180,550,1100
 Queens,,,,,,
 Saint Louis,,,,,,
 Saint Mary's,,,,,,
 Santa Clara,,,,,,
 Siena,,,,,,
 South Florida,,,,,,
-St. John's,,,225,500,1200,3300
+St. John's,,,220,500,1000,3000
 TCU,,,,,,
-Tennessee,,,158,750,2500,6500
+Tennessee,,,146,750,2700,8000
 Tennessee St.,,,,,,
-Texas,,,270,1400,5000,15000
+Texas,,,,,,
 Texas A&M,,,,,,
 Texas Tech,,,,,,
 Troy,,,,,,

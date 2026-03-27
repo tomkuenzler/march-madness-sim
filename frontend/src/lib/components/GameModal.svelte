@@ -1,5 +1,5 @@
 <script>
-  import { simulationData, pendingLocks, removeAdvancement } from '$lib/stores/simulation.js';
+  import { simulationData, pendingLocks, removeAdvancement, gameScores } from '$lib/stores/simulation.js';
   import TeamCard from './TeamCard.svelte';
 
   let { game, onclose } = $props();
@@ -40,6 +40,14 @@
       <div>
         <span class="round-label">{ROUND_NAMES[game.round] ?? `Round ${game.round}`} · {game.region}</span>
         <h2 class="modal-title">{game.team_a} vs {game.team_b}</h2>
+        {#if game.completed_winner}
+          <div class="completed-banner">
+            ✓ {game.completed_winner} won
+            {#if $gameScores[game.game_id]}
+              {$gameScores[game.game_id]}
+            {/if}
+          </div>
+        {/if}
       </div>
       <button class="close-btn" onclick={() => onclose()}>✕</button>
     </div>
@@ -281,4 +289,15 @@
   }
 
   .remove-lock-btn:hover { background: #3d2400; }
+
+  .completed-banner {
+    background: #0f2010;
+    border: 1px solid #4ade80;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #4ade80;
+    text-align: center;
+  }
 </style>

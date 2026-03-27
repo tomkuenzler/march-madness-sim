@@ -1,40 +1,29 @@
 """
 results.py
 
-Persistent storage for actual tournament game results.
-Results are stored in backend/data/results.json and survive server restarts.
-
-Results are separate from user's hypothetical locked_results — they represent
-real completed games and are always treated as 100% certain in simulations.
+Persistent storage for actual tournament game results and scores.
 """
 
 import os
 import json
-from typing import Optional
 
 RESULTS_FILE = os.path.join(os.path.dirname(__file__), "data", "results.json")
+SCORES_FILE  = os.path.join(os.path.dirname(__file__), "data", "scores.json")
 
 
-def load_results() -> dict[str, str]:
-    """
-    Load results from disk.
-    Returns dict of { game_id: winning_team_name }
-    """
+def load_results() -> dict:
     if not os.path.exists(RESULTS_FILE):
         return {}
     try:
         with open(RESULTS_FILE, "r") as f:
             data = json.load(f)
-            if isinstance(data, dict):
-                return data
-            return {}
+            return data if isinstance(data, dict) else {}
     except Exception as e:
         print(f"[RESULTS] Error loading results: {e}")
         return {}
 
 
-def save_results(results: dict[str, str]) -> bool:
-    """Save results to disk. Returns True on success."""
+def save_results(results: dict) -> bool:
     try:
         os.makedirs(os.path.dirname(RESULTS_FILE), exist_ok=True)
         with open(RESULTS_FILE, "w") as f:
@@ -45,8 +34,30 @@ def save_results(results: dict[str, str]) -> bool:
         return False
 
 
-def set_result(game_id: str, winner: str) -> dict[str, str]:
-    """Set a single game result and persist to disk."""
+def load_scores() -> dict:
+    if not os.path.exists(SCORES_FILE):
+        return {}
+    try:
+        with open(SCORES_FILE, "r") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except Exception as e:
+        print(f"[RESULTS] Error loading scores: {e}")
+        return {}
+
+
+def save_scores(scores: dict) -> bool:
+    try:
+        os.makedirs(os.path.dirname(SCORES_FILE), exist_ok=True)
+        with open(SCORES_FILE, "w") as f:
+            json.dump(scores, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"[RESULTS] Error saving scores: {e}")
+        return False
+
+
+def set_result(game_id: str, winner: str) -> dict:
     results = load_results()
     results[game_id] = winner
     save_results(results)
@@ -54,29 +65,20 @@ def set_result(game_id: str, winner: str) -> dict[str, str]:
     return results
 
 
-def clear_result(game_id: str) -> dict[str, str]:
-    """Remove a single game result."""
+def clear_result(game_id: str) -> dict:
     results = load_results()
     results.pop(game_id, None)
     save_results(results)
     return results
 
 
-def clear_all_results() -> dict[str, str]:
-    """Clear all stored results."""
+def clear_all_results() -> dict:
     save_results({})
     print("[RESULTS] All results cleared")
     return {}
 
 
-def merge_with_locks(
-    results: dict[str, str],
-    locked: dict[str, str]
-) -> dict[str, str]:
-    """
-    Merge actual results with user's hypothetical locks.
-    Results take precedence over locks for the same game.
-    """
+def merge_with_locks(results: dict, locked: dict) -> dict:
     merged = {**locked}
-    merged.update(results)  # results override locks
+    merged.update(results)
     return merged

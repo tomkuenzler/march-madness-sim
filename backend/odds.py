@@ -215,7 +215,7 @@ def build_odds_summary(simulation_results: dict) -> dict:
 
 FANDUEL_CSV = os.path.join(os.path.dirname(__file__), "data", "fanduel_odds.csv")
 
-ROUND_ADV_KEYS_ORDERED = ['R32', 'S16', 'E8', 'FF', 'Championship']
+ROUND_ADV_KEYS_ORDERED = ['R32', 'S16', 'E8', 'FF', 'Championship', 'Champion']
 
 ROUND_DISPLAY = {
     'R32': 'Round of 32',
@@ -278,7 +278,7 @@ def load_fanduel_odds(simulation_results: dict) -> dict:
             val = str(row.get(r, '')).strip()
             if val and val not in ('', 'nan'):
                 try:
-                    odds_for_round[row['Team']] = int(float(val))
+                    odds_for_round[row['Team']] = int(float(str(val).replace('+', '')))
                 except ValueError:
                     pass
         round_odds_map[r] = odds_for_round

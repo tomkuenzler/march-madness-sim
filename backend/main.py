@@ -50,6 +50,7 @@ _consensus_cache: Optional[dict] = None
 _leverage_cache: dict = {}
 _odds_cache: dict = {}
 _actual_results: dict[str, str] = {}  # persistent real game results
+_scores_cache: dict[str, str] = {}
 
 # ---------------------------------------------------------------------------
 # Startup
@@ -95,6 +96,11 @@ async def startup_event():
             print(f"[OK] Simulation updated with actual results")
         except Exception as e:
             print(f"[WARNING] Could not re-run simulation with results: {e}")
+
+    from results import load_scores
+    _scores_cache = load_scores()
+    if _scores_cache:
+        print(f"[OK] Loaded {len(_scores_cache)} game scores")
 
 # ---------------------------------------------------------------------------
 # Request/response models
@@ -344,38 +350,39 @@ def refresh_odds():
 
 @app.post("/api/results/sync")
 def sync_results_from_espn():
-    """
-    Fetch completed NCAA Tournament results from ESPN and update results.json.
-    Only adds new results — never overwrites existing ones.
-    """
-    global _actual_results, _simulation_cache, _leverage_cache
+    global _actual_results, _scores_cache, _simulation_cache, _leverage_cache
     if not _teams:
         raise HTTPException(status_code=503, detail="Team data not loaded.")
-
     from espn_sync import fetch_espn_results
-
+    from results import save_scores
     known_teams = set(_teams.keys())
     try:
-        updated = fetch_espn_results(known_teams, _actual_results)
-        new_count = len(updated) - len(_actual_results)
-
+        updated_results, updated_scores = fetch_espn_results(
+            known_teams, _actual_results, _scores_cache
+        )
+        new_count = len(updated_results) - len(_actual_results)
         if new_count > 0:
             from results import save_results
-            save_results(updated)
-            _actual_results = updated
+            save_results(updated_results)
+            _actual_results = updated_results
             merged = merge_with_locks(_actual_results, _locked_results)
             _simulation_cache = run_monte_carlo(_teams, N_SIMULATIONS, merged)
             if _consensus_cache:
                 _leverage_cache = compute_leverage(_simulation_cache, _consensus_cache)
-            print(f"[ESPN] Synced {new_count} new results")
-        else:
-            print("[ESPN] No new results found")
-
+        # Always save scores even if no new results
+        save_scores(updated_scores)
+        _scores_cache = updated_scores
         return {
             "new_results": new_count,
-            "total_results": len(updated),
-            "results": updated,
+            "total_results": len(updated_results),
+            "scores_captured": len(updated_scores),
+            "results": updated_results,
             "simulation_updated": new_count > 0,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ESPN sync failed: {e}")
+
+@app.get("/api/scores")
+def get_scores():
+    """Return stored game scores."""
+    return {"scores": _scores_cache}

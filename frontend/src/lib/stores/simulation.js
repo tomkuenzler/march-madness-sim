@@ -9,6 +9,7 @@ export const isLoading = writable(false);
 export const error = writable(null);
 export const lockedResults = writable({});
 export const actualResults = writable({});
+export const gameScores = writable({});
 
 // Pending locks — applied locally before re-running simulation
 // game_id -> team name, or round_key -> team name for future rounds
@@ -57,6 +58,10 @@ export async function fetchSimulation() {
             const resultsRes = await axios.get(`${API_BASE}/api/results`);
             actualResults.set(resultsRes.data.results || {});
         } catch (e) { console.error('Could not load results:', e); }
+        try {
+            const scoresRes = await axios.get(`${API_BASE}/api/scores`);
+            gameScores.set(scoresRes.data.scores || {});
+        } catch (e) { console.error('Could not load scores:', e); }
     } catch (e) {
         error.set('Failed to load simulation data. Is the backend running?');
         console.error(e);
@@ -228,6 +233,10 @@ export async function syncResultsFromESPN() {
         const res = await axios.post(`${API_BASE}/api/results/sync`);
         if (res.data.simulation_updated) {
             await fetchSimulation();
+        } else {
+            // Still refresh scores even if no new results
+            const scoresRes = await axios.get(`${API_BASE}/api/scores`);
+            gameScores.set(scoresRes.data.scores || {});
         }
         return res.data;
     } catch (e) {
