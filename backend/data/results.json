@@ -51,5 +51,9 @@
   "West_R3_G2": "Purdue",
   "South_R3_G1": "Iowa",
   "West_R3_G1": "Arizona",
-  "South_R3_G2": "Illinois"
+  "South_R3_G2": "Illinois",
+  "East_R3_G1": "Duke",
+  "Midwest_R3_G1": "Michigan",
+  "East_R3_G2": "Connecticut",
+  "Midwest_R3_G2": "Tennessee"
 }

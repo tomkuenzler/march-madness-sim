@@ -437,7 +437,11 @@
                   {#if rd}
                     <td class="odds-cell" class:value-cell={rd.is_value}>{rd.odds}</td>
                     <td class="model-odds-cell">{rd.model_odds}</td>
-                    <td style="color:{edgeColor(rd.edge)}" class:bold={rd.is_value}>{rd.edge_pct}</td>
+                    <td
+                      style="color:{edgeColor(rd.edge)}"
+                      class:bold={rd.is_value}
+                      title={`FD Implied: ${(rd.fd_implied * 100).toFixed(1)}% | Model: ${(rd.model_pct * 100).toFixed(1)}% | Edge: ${rd.edge_pct}`}
+                    >{rd.edge_pct}</td>
                   {:else}
                     <td class="na">—</td><td class="na">—</td><td class="na">—</td>
                   {/if}
