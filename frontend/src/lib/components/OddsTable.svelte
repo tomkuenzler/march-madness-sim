@@ -342,7 +342,7 @@
 
     {:else if bettingSubTab === 'matchups'}
       {@const matchups = currentMatchups()}
-      <span class="odds-note">Model odds use KenPom head-to-head formula (independent of bracket path). Edge = Model% − No-Vig Implied%.</span>
+      <span class="odds-note">Model odds use KenPom head-to-head formula (independent of bracket path)</span>
       {#if matchups.length === 0}
         <div class="info-banner">No matchup data available for the current round.</div>
       {:else}
@@ -392,7 +392,6 @@
         </div>
         <div class="legend">
             <span style="color:#4ade80">★</span> Value bet (3%+ edge) &nbsp;·&nbsp;
-            Edge = Model% − No-Vig Implied% (vig removed within each matchup) &nbsp;·&nbsp;
             <span style="color:#475569">Note: Model % in Futures tab uses simulation data and may differ slightly</span>
         </div>
       {/if}
@@ -403,7 +402,6 @@
       {@const ROUND_LABELS = { R32: 'R32', S16: 'S16', E8: 'E8', FF: 'FF', Championship: 'Final', Champion: '🏆 Win' }}
       <div class="betting-meta-bar">
         <span>📊 FanDuel · Tournament Advancement Futures</span>
-        <span class="odds-note">No-vig implied probabilities. Edge = Model% − No-Vig Implied%.</span>
       </div>
       <div class="table-wrap">
         <table>
@@ -454,8 +452,7 @@
       <div class="legend">
         <span style="color:#4ade80">■</span> Value (3%+ edge) &nbsp;
         <span style="color:#94a3b8">■</span> Fair &nbsp;
-        <span style="color:#ef4444">■</span> Avoid &nbsp;·&nbsp;
-        Edge = Model% − No-Vig Implied%
+        <span style="color:#ef4444">■</span> Avoid
       </div>
     {/if}
   {/if}
