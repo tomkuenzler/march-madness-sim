@@ -41,8 +41,8 @@ ROUND4_PAIRS = [(0, 1)]
 
 REGIONS = ["East", "West", "South", "Midwest"]
 
-# Final Four matchups: East vs West, South vs Midwest (standard NCAA)
-FINAL_FOUR_PAIRS = [("East", "West"), ("South", "Midwest")]
+# Final Four matchups: East vs South, West vs Midwest (standard NCAA)
+FINAL_FOUR_PAIRS = [("East", "South"), ("West", "Midwest")]
 
 ROUND_NAMES = {
     1: "Round of 64",

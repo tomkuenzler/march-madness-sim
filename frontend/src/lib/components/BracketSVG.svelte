@@ -17,8 +17,10 @@
   let resultContext = $state(null);
   // Determine active round from results
   let activeRound = $derived(
-    Object.keys($actualResults).some(k => k.includes('_R4_')) ? 5 :
-    Object.keys($actualResults).some(k => k.includes('_R3_')) ? 4 :
+    (Object.keys($actualResults).some(k => k === 'FF_G1') &&
+     Object.keys($actualResults).some(k => k === 'FF_G2')) ? 7 :
+    Object.keys($actualResults).some(k => k.includes('_R4_')) ? 6 :
+    Object.keys($actualResults).some(k => k.includes('_R3_')) ? 5 :
     Object.keys($actualResults).some(k => k.includes('_R2_')) ? 3 :
     Object.keys($actualResults).some(k => k.includes('_R1_')) ? 2 : 1
   );
@@ -32,17 +34,6 @@
       return eliminated;
     }, {})
   );
-  $effect(() => {
-    console.log('activeRound:', activeRound);
-    const s16slots = layout.slots.filter(s => s.round === 3 && !s.isTBD);
-    console.log('S16 non-TBD slots:', s16slots.length, s16slots.map(s => s.teamName));
-    // Log ALL unique round values in the layout
-    const rounds = [...new Set(layout.slots.map(s => s.round))].sort();
-    console.log('All slot rounds in layout:', rounds);
-    console.log('Sample S16 slot:', layout.slots.find(s => !s.isTBD && s.teamName === 'Duke' && s.round !== 1));
-    console.log('Duke S16 full object:', JSON.stringify(layout.slots.find(s => s.teamName === 'Duke' && s.round === 3)));
-  }); 
-
   let mergedLocks = $derived({ ...$actualResults, ...$pendingLocks });
   let layout = $derived(buildBracketLayout($simulationData, mergedLocks));
 
@@ -104,114 +95,104 @@
 
   async function handleSlotClick(slot) {
 
-    // Round 5 regional slots (FF participants)
-    if (slot.round === 5 && slot.teamName && !slot.isFinalistSlot) {
-      const ffMatchup = layout.matchups.find(m =>
-        m.isFinalFour && (m.teamA === slot.teamName || m.teamB === slot.teamName)
-      );
-      if (ffMatchup && ffMatchup.teamA && ffMatchup.teamB) {
-        // Check for actual result
-        if ($actualResults[ffMatchup.gameId]) {
-          resultContext = { gameId: ffMatchup.gameId, teamA: ffMatchup.teamA, teamB: ffMatchup.teamB, winner: $actualResults[ffMatchup.gameId], round: 5, region: 'Final Four' };
-          resultModalOpen = true;
-          return;
-        }
-        const data = await fetchMatchup(ffMatchup.teamA, ffMatchup.teamB);
-        if (!data) return;
-        modalGame = {
-          game_id: ffMatchup.gameId, round: 5, region: 'Final Four',
-          team_a: ffMatchup.teamA, team_b: ffMatchup.teamB,
-          seed_a: $simulationData?.teams?.[ffMatchup.teamA]?.seed,
-          seed_b: $simulationData?.teams?.[ffMatchup.teamB]?.seed,
-          win_prob_a: data.win_prob_a, win_prob_b: data.win_prob_b,
-          point_diff: data.point_diff, upset_alert: data.upset_alert,
-          source_game_id: slot.sourceGameId,
-        };
-        modalOpen = true;
-        return;
-      }
-    }
-
-    // FF finalist slot
-    if (slot.isFinalistSlot) {
-      const ffMatchup = layout.matchups.find(m => m.gameId === slot.sourceGameId);
-      if (slot.isTBD && ffMatchup) {
-        let candidates = slot.topCandidates ?? [];
-        if (candidates.length === 2 && candidates[0]?.name && candidates[1]?.name) {
-          const h2h = await fetchMatchup(candidates[0].name, candidates[1].name);
-          if (h2h) {
-            candidates = [
-              { ...candidates[0], prob: h2h.win_prob_a, isH2H: true },
-              { ...candidates[1], prob: h2h.win_prob_b, isH2H: true },
-            ];
-          }
-        }
-        advanceContext = { gameId: slot.sourceGameId, candidates, round: slot.round, region: slot.region, advRoundKey: 'Championship', targetRoundLabel: 'Championship', isH2H: candidates[0]?.isH2H ?? false };
-        advanceModalOpen = true;
-        return;
-      }
-      if (!slot.isTBD && ffMatchup?.teamA && ffMatchup?.teamB) {
-        // Check for actual result
-        if ($actualResults[ffMatchup.gameId]) {
-          resultContext = { gameId: ffMatchup.gameId, teamA: ffMatchup.teamA, teamB: ffMatchup.teamB, winner: $actualResults[ffMatchup.gameId], round: 6, region: 'Final Four' };
-          resultModalOpen = true;
-          return;
-        }
-        const data = await fetchMatchup(ffMatchup.teamA, ffMatchup.teamB);
-        if (!data) return;
-        modalGame = {
-          game_id: ffMatchup.gameId, round: 6, region: 'Final Four',
-          team_a: ffMatchup.teamA, team_b: ffMatchup.teamB,
-          seed_a: $simulationData?.teams?.[ffMatchup.teamA]?.seed,
-          seed_b: $simulationData?.teams?.[ffMatchup.teamB]?.seed,
-          win_prob_a: data.win_prob_a, win_prob_b: data.win_prob_b,
-          point_diff: data.point_diff, upset_alert: data.upset_alert,
-          source_game_id: slot.sourceGameId,
-        };
-        modalOpen = true;
-      }
+  // Round 5 — FF regional slots (Connecticut, Illinois, Arizona, Michigan)
+  if (slot.round === 5 && slot.teamName && !slot.isFinalistSlot) {
+    const ffMatchup = layout.matchups.find(m =>
+      m.isFinalFour && (m.teamA === slot.teamName || m.teamB === slot.teamName)
+    );
+    if (ffMatchup && ffMatchup.teamA && ffMatchup.teamB) {
+      const data = await fetchMatchup(ffMatchup.teamA, ffMatchup.teamB);
+      if (!data) return;
+      modalGame = {
+        game_id: ffMatchup.gameId, round: 5, region: 'Final Four',
+        team_a: ffMatchup.teamA, team_b: ffMatchup.teamB,
+        seed_a: $simulationData?.teams?.[ffMatchup.teamA]?.seed,
+        seed_b: $simulationData?.teams?.[ffMatchup.teamB]?.seed,
+        win_prob_a: data.win_prob_a, win_prob_b: data.win_prob_b,
+        point_diff: data.point_diff, upset_alert: data.upset_alert,
+        source_game_id: slot.sourceGameId,
+        completed_winner: $actualResults[ffMatchup.gameId] ?? null,
+      };
+      modalOpen = true;
       return;
     }
+  }
 
-    // Championship slot
-    if (slot.isChampionSlot) {
-      const champMatchup = layout.matchups.find(m => m.gameId === 'Championship');
-      if (slot.isTBD && champMatchup) {
-        let candidates = slot.topCandidates ?? [];
-        if (candidates.length === 2 && candidates[0]?.name && candidates[1]?.name) {
-          const h2h = await fetchMatchup(candidates[0].name, candidates[1].name);
-          if (h2h) {
-            candidates = [
-              { ...candidates[0], prob: h2h.win_prob_a, isH2H: true },
-              { ...candidates[1], prob: h2h.win_prob_b, isH2H: true },
-            ];
-          }
-        }
-        advanceContext = { gameId: 'Championship', candidates, round: slot.round, region: 'Championship', advRoundKey: 'Champion', targetRoundLabel: 'Champion', isH2H: candidates[0]?.isH2H ?? false };
-        advanceModalOpen = true;
-        return;
-      }
-      if (!slot.isTBD && champMatchup?.teamA && champMatchup?.teamB) {
-        if ($actualResults['Championship']) {
-          resultContext = { gameId: 'Championship', teamA: champMatchup.teamA, teamB: champMatchup.teamB, winner: $actualResults['Championship'], round: 6, region: 'Championship' };
-          resultModalOpen = true;
-          return;
-        }
-        const data = await fetchMatchup(champMatchup.teamA, champMatchup.teamB);
-        if (!data) return;
-        modalGame = {
-          game_id: 'Championship', round: 6, region: 'Championship',
-          team_a: champMatchup.teamA, team_b: champMatchup.teamB,
-          seed_a: $simulationData?.teams?.[champMatchup.teamA]?.seed,
-          seed_b: $simulationData?.teams?.[champMatchup.teamB]?.seed,
-          win_prob_a: data.win_prob_a, win_prob_b: data.win_prob_b,
-          point_diff: data.point_diff, upset_alert: data.upset_alert,
-          source_game_id: 'Championship',
-        };
-        modalOpen = true;
-      }
+  // Round 6 — Finalist slots (Connecticut/Michigan in center)
+  // Always show the Championship matchup
+  if (slot.isFinalistSlot) {
+    const champMatchup = layout.matchups.find(m => m.gameId === 'Championship');
+    if (champMatchup?.teamA && champMatchup?.teamB) {
+      const data = await fetchMatchup(champMatchup.teamA, champMatchup.teamB);
+      if (!data) return;
+      modalGame = {
+        game_id: 'Championship', round: 6, region: 'Championship',
+        team_a: champMatchup.teamA, team_b: champMatchup.teamB,
+        seed_a: $simulationData?.teams?.[champMatchup.teamA]?.seed,
+        seed_b: $simulationData?.teams?.[champMatchup.teamB]?.seed,
+        win_prob_a: data.win_prob_a, win_prob_b: data.win_prob_b,
+        point_diff: data.point_diff, upset_alert: data.upset_alert,
+        source_game_id: 'Championship',
+        completed_winner: $actualResults['Championship'] ?? null,
+      };
+      modalOpen = true;
       return;
     }
+    // Fallback: if Championship matchup not yet known, show advance modal
+    const sfMatchup = layout.matchups.find(m => m.gameId === slot.sourceGameId);
+    if (slot.isTBD && sfMatchup) {
+      let candidates = slot.topCandidates ?? [];
+      if (candidates.length === 2 && candidates[0]?.name && candidates[1]?.name) {
+        const h2h = await fetchMatchup(candidates[0].name, candidates[1].name);
+        if (h2h) {
+          candidates = [
+            { ...candidates[0], prob: h2h.win_prob_a, isH2H: true },
+            { ...candidates[1], prob: h2h.win_prob_b, isH2H: true },
+          ];
+        }
+      }
+      advanceContext = { gameId: slot.sourceGameId, candidates, round: slot.round, region: slot.region, advRoundKey: 'Championship', targetRoundLabel: 'Championship', isH2H: candidates[0]?.isH2H ?? false };
+      advanceModalOpen = true;
+    }
+    return;
+  }
+
+  // Round 7 — Championship slot
+  if (slot.isChampionSlot) {
+    const champMatchup = layout.matchups.find(m => m.gameId === 'Championship');
+    if (slot.isTBD && champMatchup) {
+      let candidates = slot.topCandidates ?? [];
+      if (candidates.length === 2 && candidates[0]?.name && candidates[1]?.name) {
+        const h2h = await fetchMatchup(candidates[0].name, candidates[1].name);
+        if (h2h) {
+          candidates = [
+            { ...candidates[0], prob: h2h.win_prob_a, isH2H: true },
+            { ...candidates[1], prob: h2h.win_prob_b, isH2H: true },
+          ];
+        }
+      }
+      advanceContext = { gameId: 'Championship', candidates, round: slot.round, region: 'Championship', advRoundKey: 'Champion', targetRoundLabel: 'Champion', isH2H: candidates[0]?.isH2H ?? false };
+      advanceModalOpen = true;
+      return;
+    }
+    if (!slot.isTBD && champMatchup?.teamA && champMatchup?.teamB) {
+      const data = await fetchMatchup(champMatchup.teamA, champMatchup.teamB);
+      if (!data) return;
+      modalGame = {
+        game_id: 'Championship', round: 6, region: 'Championship',
+        team_a: champMatchup.teamA, team_b: champMatchup.teamB,
+        seed_a: $simulationData?.teams?.[champMatchup.teamA]?.seed,
+        seed_b: $simulationData?.teams?.[champMatchup.teamB]?.seed,
+        win_prob_a: data.win_prob_a, win_prob_b: data.win_prob_b,
+        point_diff: data.point_diff, upset_alert: data.upset_alert,
+        source_game_id: 'Championship',
+        completed_winner: $actualResults['Championship'] ?? null,
+      };
+      modalOpen = true;
+      return;
+    }
+    return;
+  }
 
     // Regular regional slots (rounds 1-4)
     const matchup = layout.matchups.find(m =>

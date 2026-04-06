@@ -35,13 +35,20 @@
     Object.values($pendingLocks).includes(slot.teamName)
   );
 
+  // Check if team is eliminated at ANY round (for active round exclusion)
+  let isEliminatedAny = $derived(
+    slot.teamName !== null &&
+    slot.teamName in eliminatedTeams
+  );
+
   // Active round: upcoming games get a blue glow
   let isActiveRound = $derived(
-    !slot.isTBD &&
-    slot.round === activeRound &&
-    slot.teamName !== null &&
-    isWinner &&
-    !isEliminated
+    !isEliminatedAny && (
+      // Finalist slots (round 6) glow when Championship is the active round
+      (!slot.isTBD && slot.round === 6 && activeRound === 7) ||
+      // Normal rounds
+      (!slot.isTBD && slot.round === activeRound && slot.teamName !== null && isWinner)
+    )
   );
 
   let showProb = $derived(slot.prob > 0 && !slot.isTBD);

@@ -1,13 +1,13 @@
 Team,R32,S16,E8,FF,Championship,Champion
 Akron,,,,,,
 Alabama,,,,,,
-Arizona,,,,-260,125,240
+Arizona,,,,,,
 Arkansas,,,,,,
 BYU,,,,,,
 Cal Baptist,,,,,,
 Clemson,,,,,,
-Connecticut,,,,168,360,1100
-Duke,,,,-205,110,300
+Connecticut,,,,,,255
+Duke,,,,,,
 Florida,,,,,,
 Furman,,,,,,
 Georgia,,,,,,
@@ -18,8 +18,8 @@ Hofstra,,,,,,
 Houston,,,,,,
 Howard,,,,,,
 Idaho,,,,,,
-Illinois,,,,-315,210,750
-Iowa,,,,250,1300,5500
+Illinois,,,,,,
+Iowa,,,,,,
 Iowa St.,,,,,,
 Kansas,,,,,,
 Kennesaw St.,,,,,,
@@ -29,7 +29,7 @@ Louisville,,,,,,
 McNeese,,,,,,
 Miami FL,,,,,,
 Miami OH,,,,,,
-Michigan,,,,-285,145,290
+Michigan,,,,,,-320
 Michigan St.,,,,,,
 Missouri,,,,,,
 Nebraska,,,,,,
@@ -38,7 +38,7 @@ North Dakota St.,,,,,,
 Northern Iowa,,,,,,
 Ohio St.,,,,,,
 Penn,,,,,,
-Purdue,,,,210,650,1500
+Purdue,,,,,,
 Queens,,,,,,
 Saint Louis,,,,,,
 Saint Mary's,,,,,,
@@ -47,7 +47,7 @@ Siena,,,,,,
 South Florida,,,,,,
 St. John's,,,,,,
 TCU,,,,,,
-Tennessee,,,,230,950,2500
+Tennessee,,,,,,
 Tennessee St.,,,,,,
 Texas,,,,,,
 Texas A&M,,,,,,

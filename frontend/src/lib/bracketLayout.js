@@ -1,36 +1,20 @@
 /**
  * bracketLayout.js
- *
- * KEY MENTAL MODEL:
- *
- * roundSlots[r][i] = team OCCUPYING slot i in round r display.
- * locked["Region_R{r}_G{i}"] = winner of that game → appears in round r+1 slot i.
- *
- * Regional rounds 1-5 (R64 through FF) are built per region.
- * Championship round (round 6) is built from the two FF winners.
- *
- * FF_G1: East FF winner vs West FF winner  → champion slot left
- * FF_G2: South FF winner vs Midwest FF winner → champion slot right
- * Championship: FF_G1 winner vs FF_G2 winner → champion
  */
 
 export const SVG_WIDTH  = 1800;
-export const SVG_HEIGHT = 880; // slightly taller to fit championship below FF
+export const SVG_HEIGHT = 880;
 export const SLOT_W = 148;
 export const SLOT_H = 28;
 
-// 1-indexed regional rounds: [0] unused, [1]=R1 ... [5]=FF
 export const LEFT_ROUND_X  = [0,  10,  220, 400, 570, 730];
 export const RIGHT_ROUND_X = [0, 1642, 1432, 1252, 1082, 922];
 
-// Championship game slots — side by side in center
-// Left finalist (East/South winner): same x as left FF
-// Right finalist (West/Midwest winner): same x as right FF
-export const CHAMP_LEFT_X  = 730;   // left finalist slot x
-export const CHAMP_RIGHT_X = 922;   // right finalist slot x
-export const CHAMP_Y       = 410;   // y position of finalist slots
-export const CHAMPION_X    = 826;   // champion box x (centered between finalists)
-export const CHAMPION_Y    = 468;   // champion box y (below finalist slots)
+export const CHAMP_LEFT_X  = 730;
+export const CHAMP_RIGHT_X = 922;
+export const CHAMP_Y       = 410;
+export const CHAMPION_X    = 826;
+export const CHAMPION_Y    = 468;
 
 export const LEFT_SPINE_X  = 645;
 export const RIGHT_SPINE_X = 1155;
@@ -38,7 +22,6 @@ export const RIGHT_SPINE_X = 1155;
 export const REGIONS = ['East', 'South', 'West', 'Midwest'];
 export const SEED_ORDER = [1, 16, 8, 9, 5, 12, 4, 13, 6, 11, 3, 14, 7, 10, 2, 15];
 
-// What round do you reach by winning game in round R?
 export const ROUND_ADV_KEYS = {
   1: 'R32', 2: 'S16', 3: 'E8', 4: 'FF', 5: 'Championship', 6: 'Champion',
 };
@@ -65,16 +48,14 @@ export function buildBracketLayout(simulationData, pendingLocks) {
   const locked = pendingLocks ?? {};
 
   const regionBands = {
-    East:    { side: 'left',  top: 0,                height: SVG_HEIGHT / 2 },
-    South:   { side: 'left',  top: SVG_HEIGHT / 2, height: SVG_HEIGHT / 2 },
-    West:    { side: 'right', top: 0,                height: SVG_HEIGHT / 2 },
-    Midwest: { side: 'right', top: SVG_HEIGHT / 2, height: SVG_HEIGHT / 2 },
+    East:    { side: 'left',  top: 0,               height: SVG_HEIGHT / 2 },
+    South:   { side: 'left',  top: SVG_HEIGHT / 2,  height: SVG_HEIGHT / 2 },
+    West:    { side: 'right', top: 0,               height: SVG_HEIGHT / 2 },
+    Midwest: { side: 'right', top: SVG_HEIGHT / 2,  height: SVG_HEIGHT / 2 },
   };
 
   const slots = [];
   const matchups = [];
-
-  // Track FF winners per region for championship game
   const ffWinners = {};
 
   for (const region of REGIONS) {
@@ -86,7 +67,6 @@ export function buildBracketLayout(simulationData, pendingLocks) {
       if (t.region === region) seedMap[t.seed] = { name, ...t };
     }
 
-    // roundSlots[r][i] = team occupying slot i in round r
     const roundSlots = {};
     roundSlots[1] = SEED_ORDER.map(seed => seedMap[seed]);
 
@@ -111,10 +91,8 @@ export function buildBracketLayout(simulationData, pendingLocks) {
       }
     }
 
-    // Record FF winner (round 5, slot 0) for championship
     ffWinners[region] = roundSlots[5]?.[0] ?? null;
 
-    // Build slot and matchup objects for rounds 1-5
     for (let r = 1; r <= 5; r++) {
       const teamsInRound = roundSlots[r];
       if (!teamsInRound?.length) continue;
@@ -128,10 +106,20 @@ export function buildBracketLayout(simulationData, pendingLocks) {
 
         let prob = 0;
         if (team) {
-          // Use API matchup data for all rounds — simulator now builds matchups R1-R4
-          const gameId = buildGameId(region, r, Math.floor(i / 2));
-          const apiM = apiMatchups[gameId];
-          if (apiM) prob = i % 2 === 0 ? apiM.win_prob_a : apiM.win_prob_b;
+          if (r === 5) {
+            // Round 5 = FF — look up FF_G1 or FF_G2 matchup
+            const ffGameId = (region === 'East' || region === 'South') ? 'FF_G1' : 'FF_G2';
+            const isTopRegion = (region === 'East' || region === 'West');
+            const apiM = apiMatchups[ffGameId];
+            if (apiM) {
+              prob = isTopRegion ? apiM.win_prob_a : apiM.win_prob_b;
+            }
+          } else {
+            // Rounds 1-4 — use regional game ID
+            const gameId = buildGameId(region, r, Math.floor(i / 2));
+            const apiM = apiMatchups[gameId];
+            if (apiM) prob = i % 2 === 0 ? apiM.win_prob_a : apiM.win_prob_b;
+          }
         }
 
         const topCandidates = (!team && r >= 2)
@@ -176,43 +164,19 @@ export function buildBracketLayout(simulationData, pendingLocks) {
     }
   }
 
-  // ── Championship game ──────────────────────────────────────────────────────
-  // ── Final Four & Championship ─────────────────────────────────────────────
-  //
-  // Four FF team slots (one per region, showing who reached the FF):
-  //   East FF winner:    x = LEFT_ROUND_X[5],  top half y
-  //   South FF winner:   x = LEFT_ROUND_X[5],  bottom half y
-  //   West FF winner:    x = RIGHT_ROUND_X[5], top half y
-  //   Midwest FF winner: x = RIGHT_ROUND_X[5], bottom half y
-  //
-  // These are already built by the regional loop above (round 5 slots).
-  //
-  // Two semifinal game slots (who plays in the FF game):
-  //   FF_G1: East vs West   → slot at CHAMP_LEFT_X,  CHAMP_Y
-  //   FF_G2: South vs Midwest → slot at CHAMP_RIGHT_X, CHAMP_Y
-  //
-  // One championship slot at CHAMPION_X, CHAMPION_Y
-
+  // Final Four & Championship
+  // FF_G1: East (top-left) vs South (bottom-left) → left finalist slot
+  // FF_G2: West (top-right) vs Midwest (bottom-right) → right finalist slot
   const semiFinals = [
-    {
-      gameId: 'FF_G1',
-      regionA: 'East',    // left side top
-      regionB: 'South',   // left side bottom
-      slotX: CHAMP_LEFT_X,
-    },
-    {
-      gameId: 'FF_G2',
-      regionA: 'West',    // right side top
-      regionB: 'Midwest', // right side bottom
-      slotX: CHAMP_RIGHT_X,
-    },
+    { gameId: 'FF_G1', regionA: 'East',  regionB: 'South',   slotX: CHAMP_LEFT_X  },
+    { gameId: 'FF_G2', regionA: 'West',  regionB: 'Midwest', slotX: CHAMP_RIGHT_X },
   ];
 
   const finalists = [];
 
   for (const sf of semiFinals) {
-    const teamA = ffWinners[sf.regionA]; // left side winner
-    const teamB = ffWinners[sf.regionB]; // right side winner
+    const teamA = ffWinners[sf.regionA];
+    const teamB = ffWinners[sf.regionB];
     const lockedName = locked[sf.gameId];
 
     let winner = null;
@@ -233,6 +197,17 @@ export function buildBracketLayout(simulationData, pendingLocks) {
       }))
       .sort((a, b) => b.prob - a.prob);
 
+    // Use Championship matchup for finalist prob (head-to-head win probability)
+    const champM = apiMatchups['Championship'];
+    let finalistProb = 0;
+    if (winner && champM) {
+      // FF_G1 winner = team_a in Championship, FF_G2 winner = team_b
+      const isTeamA = sf.gameId === 'FF_G1';
+      finalistProb = isTeamA ? champM.win_prob_a : champM.win_prob_b;
+    } else if (winner) {
+      finalistProb = teams[winner.name]?.advancement?.Champion ?? 0;
+    }
+
     slots.push({
       id: `FF_Slot_${sf.gameId}`,
       x: sf.slotX,
@@ -242,7 +217,7 @@ export function buildBracketLayout(simulationData, pendingLocks) {
       round: 6,
       region: 'Final Four',
       isLeft: sf.slotX === CHAMP_LEFT_X,
-      prob: winner ? (teams[winner.name]?.advancement?.Championship ?? 0) : 0,
+      prob: finalistProb,
       topCandidates: candidates,
       isTBD: !winner,
       sourceGameId: sf.gameId,
@@ -283,6 +258,16 @@ export function buildBracketLayout(simulationData, pendingLocks) {
     }))
     .sort((a, b) => b.prob - a.prob);
 
+  // Championship slot prob = head-to-head win probability from Championship matchup
+  const champApiMatchup2 = apiMatchups['Championship'];
+  let champProb = 0;
+  if (champion && champApiMatchup2) {
+    const isTeamA = champion.name === champTeamA?.name;
+    champProb = isTeamA ? champApiMatchup2.win_prob_a : champApiMatchup2.win_prob_b;
+  } else if (champion) {
+    champProb = teams[champion.name]?.advancement?.Champion ?? 0;
+  }
+
   slots.push({
     id: 'Championship_S0',
     x: CHAMPION_X,
@@ -292,7 +277,7 @@ export function buildBracketLayout(simulationData, pendingLocks) {
     round: 7,
     region: 'Championship',
     isLeft: true,
-    prob: champion ? (teams[champion.name]?.advancement?.Champion ?? 0) : 0,
+    prob: 0,
     topCandidates: champCandidates,
     isTBD: !champion,
     sourceGameId: 'Championship',

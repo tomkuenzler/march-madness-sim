@@ -133,6 +133,7 @@ ESPN_NAME_MAP = {
     "Ohio State Buckeyes":       "Ohio St.",
     "Wisconsin Badgers":         "Wisconsin",
     "High Point Panthers":       "High Point",
+    "Vanderbilt Commodores":     "Vanderbilt",
 }
 
 
@@ -331,5 +332,12 @@ def fetch_espn_results(
                 # Update score even if result already stored
                 if score_str and game_id not in new_scores:
                     new_scores[game_id] = score_str
+
+    # Normalize any existing results that may have been stored with ESPN full names
+    for game_id, winner in list(new_results.items()):
+        normalized = normalize_team_name(winner, known_teams)
+        if normalized != winner and normalized in known_teams:
+            print(f"[ESPN] Normalizing stored name: {game_id} {winner} -> {normalized}")
+            new_results[game_id] = normalized
 
     return new_results, new_scores

@@ -307,4 +307,71 @@ def build_matchup_summary(
                     "upset_alert": is_upset_alert,
                 }
 
+    # Final Four matchups
+    # Build region champions by walking through locked results
+    all_region_champs = {}
+    for region in REGIONS:
+        seed_map = teams_by_region[region]
+        current = [seed_map[s] for pair in FIRST_ROUND_MATCHUPS for s in pair]
+        for r in range(1, 5):
+            next_round = []
+            for game_idx in range(len(current) // 2):
+                gid = f"{region}_R{r}_G{game_idx + 1}"
+                locked_name = locked_results.get(gid)
+                if locked_name:
+                    t_a = current[game_idx * 2]
+                    t_b = current[game_idx * 2 + 1]
+                    winner = t_a if t_a and t_a.name == locked_name else (t_b if t_b and t_b.name == locked_name else None)
+                    next_round.append(winner)
+                else:
+                    next_round.append(None)
+            current = next_round
+        all_region_champs[region] = current[0] if current else None
+
+    # FF_G1: East vs South, FF_G2: West vs Midwest
+    for i, (r_a, r_b) in enumerate(FINAL_FOUR_PAIRS):
+        gid = f"FF_G{i+1}"
+        t_a = all_region_champs.get(r_a)
+        t_b = all_region_champs.get(r_b)
+        if t_a and t_b:
+            diff = point_differential(t_a, t_b)
+            prob_a = win_probability(t_a, t_b)
+            matchups[gid] = {
+                "round": 5,
+                "region": "Final Four",
+                "team_a": t_a.name,
+                "team_b": t_b.name,
+                "seed_a": t_a.seed,
+                "seed_b": t_b.seed,
+                "win_prob_a": round(prob_a, 4),
+                "win_prob_b": round(1 - prob_a, 4),
+                "point_diff": round(diff, 2),
+                "locked_winner": locked_results.get(gid),
+                "upset_alert": abs(diff) < 3.0,
+            }
+
+    # Championship matchup
+    ff_g1_winner_name = locked_results.get("FF_G1")
+    ff_g2_winner_name = locked_results.get("FF_G2")
+    if ff_g1_winner_name and ff_g2_winner_name:
+        all_teams_flat = {t.name: t for region_teams in teams_by_region.values() for t in region_teams.values()}
+        t_a = all_teams_flat.get(ff_g1_winner_name)
+        t_b = all_teams_flat.get(ff_g2_winner_name)
+        if t_a and t_b:
+            diff = point_differential(t_a, t_b)
+            prob_a = win_probability(t_a, t_b)
+            matchups["Championship"] = {
+                "round": 6,
+                "region": "Championship",
+                "team_a": t_a.name,
+                "team_b": t_b.name,
+                "seed_a": t_a.seed,
+                "seed_b": t_b.seed,
+                "win_prob_a": round(prob_a, 4),
+                "win_prob_b": round(1 - prob_a, 4),
+                "point_diff": round(diff, 2),
+                "locked_winner": locked_results.get("Championship"),
+                "upset_alert": abs(diff) < 3.0,
+            }
+
     return matchups
