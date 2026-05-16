@@ -30,6 +30,7 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:4173",
         "https://march-madness-sim-nine.vercel.app",
+        "https://march-madness.thomaskuenzler.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
